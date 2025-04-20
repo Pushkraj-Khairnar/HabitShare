@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useChallenges, Challenge } from '@/contexts/ChallengeContext';
 import { useFriends } from '@/contexts/FriendContext';
@@ -13,12 +12,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Slider } from '@/components/ui/slider';
-import { format, addDays } from 'date-fns';
+import { format, addDays, startOfToday, subDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Calendar as CalendarIcon, Trophy, Plus, UserCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Toggle } from '@/components/ui/toggle';
+import { useAuth } from '@/contexts/AuthContext';
+import { CalendarCheck } from 'lucide-react';
 
 const ChallengesPage = () => {
   const { 
@@ -35,6 +36,7 @@ const ChallengesPage = () => {
   } = useChallenges();
   const { friends } = useFriends();
   const { toast } = useToast();
+  const { currentUser } = useAuth();
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedFriendId, setSelectedFriendId] = useState<string>('');
@@ -132,6 +134,18 @@ const ChallengesPage = () => {
   
   const renderChallengeCard = (challenge: Challenge) => {
     const users = challengeUsers[challenge.id];
+    const today = startOfToday();
+    
+    // Get last 7 days
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      return format(subDays(today, 6 - i), 'yyyy-MM-dd');
+    });
+    
+    // Check if the current user is the sender
+    const isSender = users?.sender.id === currentUser?.uid;
+    const userCompletions = isSender 
+      ? challenge.senderDailyCompletions 
+      : challenge.receiverDailyCompletions;
     
     return (
       <Card key={challenge.id} className="mb-4">
@@ -183,14 +197,38 @@ const ChallengesPage = () => {
             </div>
           )}
           
-          <div className="mt-4">
-            <p className="text-sm font-medium mb-1">Your Progress</p>
-            <Slider 
-              defaultValue={[challenge.senderId === users?.sender.id ? challenge.senderProgress : challenge.receiverProgress]} 
-              max={100} 
-              step={5}
-              onValueCommit={(value) => handleUpdateProgress(challenge.id, value[0])}
-            />
+          <div className="mt-6">
+            <p className="text-sm font-medium mb-3">Mark Daily Completion</p>
+            <div className="flex justify-between gap-2">
+              {last7Days.map((date) => {
+                const isCompleted = userCompletions?.includes(date);
+                const isPast = new Date(date) < today;
+                const isToday = date === format(today, 'yyyy-MM-dd');
+                
+                return (
+                  <Toggle
+                    key={date}
+                    pressed={isCompleted}
+                    disabled={!isToday || challenge.status !== 'active'}
+                    onPressedChange={(pressed) => {
+                      if (pressed) {
+                        handleUpdateProgress(challenge.id, 
+                          ((userCompletions?.length || 0) + 1) * (100 / challenge.duration)
+                        );
+                      }
+                    }}
+                    className={cn(
+                      "flex flex-col items-center p-2 gap-1 data-[state=on]:bg-habit-success",
+                      isCompleted ? "bg-habit-success text-white" : "bg-muted",
+                      !isToday && "opacity-50"
+                    )}
+                  >
+                    <CalendarCheck className="h-4 w-4" />
+                    <span className="text-xs">{format(new Date(date), 'd')}</span>
+                  </Toggle>
+                );
+              })}
+            </div>
           </div>
         </CardContent>
       </Card>
