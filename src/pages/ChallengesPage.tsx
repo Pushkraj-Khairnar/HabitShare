@@ -14,7 +14,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format, addDays, startOfToday, subDays } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { Calendar as CalendarIcon, Trophy, Plus, UserCheck } from 'lucide-react';
+import { Calendar as CalendarIcon, Trophy, Plus, UserCheck, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Toggle } from '@/components/ui/toggle';
@@ -32,6 +32,7 @@ const ChallengesPage = () => {
     declineChallenge,
     updateProgress,
     getChallengeUsers,
+    refreshChallenges,
     isLoading 
   } = useChallenges();
   const { friends } = useFriends();
@@ -46,9 +47,19 @@ const ChallengesPage = () => {
   const [duration, setDuration] = useState<number>(7);
   const [startDate, setStartDate] = useState<Date>(new Date());
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // Store challenge participants
   const [challengeUsers, setChallengeUsers] = useState<Record<string, { sender: any, receiver: any }>>({});
+  
+  // Auto-refresh on initial load and after creation
+  useEffect(() => {
+    const loadData = async () => {
+      await refreshChallenges();
+    };
+    
+    loadData();
+  }, []);
   
   // Fetch users for active challenges
   useEffect(() => {
@@ -105,6 +116,9 @@ const ChallengesPage = () => {
       setDuration(7);
       setStartDate(new Date());
       setIsDialogOpen(false);
+      
+      // Refresh challenges to show the new one
+      await refreshChallenges();
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -113,6 +127,57 @@ const ChallengesPage = () => {
       });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+  
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshChallenges();
+      toast({
+        title: 'Refreshed',
+        description: 'Challenge data has been updated',
+      });
+    } catch (error) {
+      console.error('Failed to refresh challenges:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+  
+  const handleAcceptChallenge = async (challengeId: string) => {
+    try {
+      await acceptChallenge(challengeId);
+      toast({
+        title: 'Challenge accepted',
+        description: 'Good luck with your challenge!',
+      });
+      // Refresh to update the UI
+      await refreshChallenges();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to accept challenge',
+        variant: 'destructive',
+      });
+    }
+  };
+  
+  const handleDeclineChallenge = async (challengeId: string) => {
+    try {
+      await declineChallenge(challengeId);
+      toast({
+        title: 'Challenge declined',
+        description: 'The challenge has been declined',
+      });
+      // Refresh to update the UI
+      await refreshChallenges();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to decline challenge',
+        variant: 'destructive',
+      });
     }
   };
   
@@ -257,7 +322,7 @@ const ChallengesPage = () => {
             Decline
           </Button>
           <Button 
-            onClick={() => acceptChallenge(challenge.id)}
+            onClick={() => handleAcceptChallenge(challenge.id)}
           >
             Accept
           </Button>
@@ -270,148 +335,159 @@ const ChallengesPage = () => {
     <div className="space-y-6 pb-16">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Challenges</h1>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" /> New Challenge
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Create Challenge</DialogTitle>
-              <DialogDescription>
-                Challenge a friend to build a habit together.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleCreateChallenge} className="space-y-4 py-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Friend</label>
-                <Select 
-                  value={selectedFriendId} 
-                  onValueChange={setSelectedFriendId}
-                  disabled={isSubmitting}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select friend to challenge" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {friends.length > 0 ? (
-                      friends.map(friend => (
-                        <SelectItem key={friend.id} value={friend.id}>
-                          {friend.username}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="" disabled>
-                        No friends available
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Habit Name</label>
-                <Input
-                  value={habitName}
-                  onChange={(e) => setHabitName(e.target.value)}
-                  placeholder="Read books, Exercise, Meditate..."
-                  required
-                  disabled={isSubmitting}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Description</label>
-                <Textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Details about the challenge..."
-                  disabled={isSubmitting}
-                />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="h-10 w-10"
+          >
+            <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+          </Button>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" /> New Challenge
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Create Challenge</DialogTitle>
+                <DialogDescription>
+                  Challenge a friend to build a habit together.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleCreateChallenge} className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Frequency</label>
-                  <Select
-                    value={frequency}
-                    onValueChange={(value: 'daily' | 'weekly') => setFrequency(value)}
+                  <label className="text-sm font-medium">Friend</label>
+                  <Select 
+                    value={selectedFriendId} 
+                    onValueChange={setSelectedFriendId}
                     disabled={isSubmitting}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select frequency" />
+                      <SelectValue placeholder="Select friend to challenge" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="daily">Daily</SelectItem>
-                      <SelectItem value="weekly">Weekly</SelectItem>
+                      {friends.length > 0 ? (
+                        friends.map(friend => (
+                          <SelectItem key={friend.id} value={friend.id}>
+                            {friend.username}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="" disabled>
+                          No friends available
+                        </SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
                 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Duration (days)</label>
-                  <Select
-                    value={duration.toString()}
-                    onValueChange={(value) => setDuration(parseInt(value))}
+                  <label className="text-sm font-medium">Habit Name</label>
+                  <Input
+                    value={habitName}
+                    onChange={(e) => setHabitName(e.target.value)}
+                    placeholder="Read books, Exercise, Meditate..."
+                    required
                     disabled={isSubmitting}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select duration" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="7">7 days</SelectItem>
-                      <SelectItem value="14">14 days</SelectItem>
-                      <SelectItem value="30">30 days</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  />
                 </div>
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Start Date</label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !startDate && "text-muted-foreground"
-                      )}
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Description</label>
+                  <Textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Details about the challenge..."
+                    disabled={isSubmitting}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Frequency</label>
+                    <Select
+                      value={frequency}
+                      onValueChange={(value: 'daily' | 'weekly') => setFrequency(value)}
                       disabled={isSubmitting}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {startDate ? format(startDate, "PPP") : "Pick a date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={startDate}
-                      onSelect={(date) => date && setStartDate(date)}
-                      initialFocus
-                      disabled={(date) => date < new Date()}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              
-              <DialogFooter>
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => setIsDialogOpen(false)}
-                  disabled={isSubmitting}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isSubmitting || !selectedFriendId}>
-                  {isSubmitting ? 'Creating...' : 'Create Challenge'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select frequency" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="daily">Daily</SelectItem>
+                        <SelectItem value="weekly">Weekly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Duration (days)</label>
+                    <Select
+                      value={duration.toString()}
+                      onValueChange={(value) => setDuration(parseInt(value))}
+                      disabled={isSubmitting}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select duration" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="7">7 days</SelectItem>
+                        <SelectItem value="14">14 days</SelectItem>
+                        <SelectItem value="30">30 days</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Start Date</label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !startDate && "text-muted-foreground"
+                        )}
+                        disabled={isSubmitting}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {startDate ? format(startDate, "PPP") : "Pick a date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={startDate}
+                        onSelect={(date) => date && setStartDate(date)}
+                        initialFocus
+                        disabled={(date) => date < new Date()}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                
+                <DialogFooter>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => setIsDialogOpen(false)}
+                    disabled={isSubmitting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting || !selectedFriendId}>
+                    {isSubmitting ? 'Creating...' : 'Create Challenge'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
       
       {isLoading ? (

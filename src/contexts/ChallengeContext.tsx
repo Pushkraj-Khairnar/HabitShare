@@ -107,13 +107,13 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
       console.log('Fetching challenges for user:', currentUser.uid);
       
+      // IMPORTANT FIX: Removed the orderBy to avoid query limitations
       const userChallengesQuery = query(
         collection(db, 'challenges'),
         or(
           where('senderId', '==', currentUser.uid),
           where('receiverId', '==', currentUser.uid)
-        ),
-        orderBy('createdAt', 'desc')
+        )
       );
       
       const challengesSnapshot = await getDocs(userChallengesQuery);
@@ -128,7 +128,10 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
       challengesSnapshot.forEach(doc => {
         const challenge = {
           id: doc.id,
-          ...doc.data()
+          ...doc.data(),
+          // Ensure arrays are initialized
+          senderDailyCompletions: doc.data().senderDailyCompletions || [],
+          receiverDailyCompletions: doc.data().receiverDailyCompletions || []
         } as Challenge;
         
         console.log('Challenge:', challenge.id, 'Status:', challenge.status, 'SenderId:', challenge.senderId, 'ReceiverId:', challenge.receiverId);
@@ -136,6 +139,7 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
         const endDate = new Date(challenge.endDate);
         const today = new Date();
         
+        // Update completed challenges
         if (endDate < today && challenge.status === 'active') {
           updateDoc(doc.ref, { 
             status: 'completed' as const 
@@ -143,16 +147,19 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
           challenge.status = 'completed';
         }
         
-        if (challenge.senderId === currentUser.uid && challenge.status === 'pending') {
-          sent.push(challenge);
-          console.log('Added to sent challenges');
-        } else if (challenge.receiverId === currentUser.uid && challenge.status === 'pending') {
-          received.push(challenge);
-          console.log('Added to received challenges');
+        // Make sure to properly categorize challenges
+        if (challenge.status === 'pending') {
+          if (challenge.senderId === currentUser.uid) {
+            sent.push(challenge);
+            console.log('Added to sent challenges');
+          } else if (challenge.receiverId === currentUser.uid) {
+            received.push(challenge);
+            console.log('Added to received challenges');
+          }
         } else if (challenge.status === 'active') {
           active.push(challenge);
           console.log('Added to active challenges');
-        } else if (challenge.status === 'completed') {
+        } else if (challenge.status === 'completed' || challenge.status === 'failed') {
           completed.push(challenge);
           console.log('Added to completed challenges');
         }
@@ -161,10 +168,14 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
       console.log('Final counts - Sent:', sent.length, 'Received:', received.length, 
                  'Active:', active.length, 'Completed:', completed.length);
       
-      setSentChallenges(sent);
-      setReceivedChallenges(received);
-      setActiveChallenges(active);
-      setCompletedChallenges(completed);
+      // Re-sort challenges by creation date
+      const sortByDateDesc = (a: Challenge, b: Challenge) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      
+      setSentChallenges(sent.sort(sortByDateDesc));
+      setReceivedChallenges(received.sort(sortByDateDesc));
+      setActiveChallenges(active.sort(sortByDateDesc));
+      setCompletedChallenges(completed.sort(sortByDateDesc));
     } catch (error) {
       console.error('Error fetching challenges:', error);
     } finally {
@@ -427,6 +438,8 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
   };
 
   const refreshChallenges = async () => {
+    // Reset loading state and fetch challenges again
+    setIsLoading(true);
     await fetchChallenges();
   };
 
