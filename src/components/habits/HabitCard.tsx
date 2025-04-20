@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useHabits, Habit, HabitLog } from '@/contexts/HabitContext';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +15,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 interface HabitCardProps {
   habit: Habit;
@@ -27,15 +27,12 @@ const HabitCard = ({ habit }: HabitCardProps) => {
   const { deleteHabit, logHabitCompletion, habitLogs } = useHabits();
   const { toast } = useToast();
 
-  // Get the last 7 days of logs for this habit
   const recentLogs = habitLogs[habit.id] || [];
   
-  // Generate an array of the last 7 days
   const last7Days = Array.from({ length: 7 }, (_, i) => {
     const date = subDays(new Date(), 6 - i);
     const dateStr = format(date, 'yyyy-MM-dd');
     
-    // Find the log for this date
     const log = recentLogs.find(log => {
       const logDate = parseISO(log.date);
       return isSameDay(logDate, date);
