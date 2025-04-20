@@ -31,6 +31,7 @@ const ChallengesPage = () => {
     declineChallenge,
     updateProgress,
     getChallengeUsers,
+    refreshChallenges,
     isLoading 
   } = useChallenges();
   const { friends } = useFriends();
@@ -65,6 +66,11 @@ const ChallengesPage = () => {
       fetchChallengeUsers();
     }
   }, [activeChallenges, getChallengeUsers]);
+
+  // Add an effect to refresh challenges when the page loads
+  useEffect(() => {
+    refreshChallenges();
+  }, [refreshChallenges]);
   
   const handleCreateChallenge = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,6 +109,9 @@ const ChallengesPage = () => {
       setDuration(7);
       setStartDate(new Date());
       setIsDialogOpen(false);
+      
+      // Refresh challenges after creating a new one
+      await refreshChallenges();
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -125,6 +134,40 @@ const ChallengesPage = () => {
       toast({
         title: 'Error',
         description: error.message || 'Failed to update progress',
+        variant: 'destructive',
+      });
+    }
+  };
+  
+  const handleAcceptChallenge = async (challengeId: string) => {
+    try {
+      await acceptChallenge(challengeId);
+      toast({
+        title: 'Challenge accepted!',
+        description: 'The challenge has been added to your active challenges.',
+      });
+      await refreshChallenges();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to accept challenge',
+        variant: 'destructive',
+      });
+    }
+  };
+  
+  const handleDeclineChallenge = async (challengeId: string) => {
+    try {
+      await declineChallenge(challengeId);
+      toast({
+        title: 'Challenge declined',
+        description: 'The challenge has been declined.',
+      });
+      await refreshChallenges();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to decline challenge',
         variant: 'destructive',
       });
     }
@@ -214,12 +257,12 @@ const ChallengesPage = () => {
         <CardFooter className="flex space-x-2">
           <Button 
             variant="outline" 
-            onClick={() => declineChallenge(challenge.id)}
+            onClick={() => handleDeclineChallenge(challenge.id)}
           >
             Decline
           </Button>
           <Button 
-            onClick={() => acceptChallenge(challenge.id)}
+            onClick={() => handleAcceptChallenge(challenge.id)}
           >
             Accept
           </Button>
