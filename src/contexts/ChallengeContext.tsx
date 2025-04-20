@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   collection,
@@ -129,9 +128,12 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
         const endDate = new Date(challenge.endDate);
         const today = new Date();
         
+        // Fix: Properly cast the status to the specific type
         if (endDate < today && challenge.status === 'active') {
-          // Challenge has ended, update status to completed
-          updateDoc(doc.ref, { status: 'completed' as const });
+          // Update to completed status
+          updateDoc(doc.ref, { 
+            status: 'completed' as const 
+          });
           challenge.status = 'completed';
         }
         
@@ -181,7 +183,7 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
       duration: data.duration,
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
-      status: 'pending',
+      status: 'pending' as const,  // Fix: Use a const assertion to specify the literal type
       senderProgress: 0,
       receiverProgress: 0,
       createdAt: new Date().toISOString()
@@ -203,7 +205,7 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     const challengeRef = doc(db, 'challenges', challengeId);
     
     await updateDoc(challengeRef, {
-      status: 'active',
+      status: 'active' as const,  // Fix: Use a const assertion
       updatedAt: new Date().toISOString()
     });
     
@@ -214,7 +216,11 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     
     const challenge = receivedChallenges.find(c => c.id === challengeId);
     if (challenge) {
-      const updatedChallenge = { ...challenge, status: 'active' };
+      // Fix: Properly update the challenge status to ensure type safety
+      const updatedChallenge: Challenge = { 
+        ...challenge, 
+        status: 'active'  // TypeScript infers this as the literal type
+      };
       setActiveChallenges(prev => [updatedChallenge, ...prev]);
     }
   };
@@ -223,7 +229,7 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     const challengeRef = doc(db, 'challenges', challengeId);
     
     await updateDoc(challengeRef, {
-      status: 'declined',
+      status: 'declined' as const,  // Fix: Use a const assertion
       updatedAt: new Date().toISOString()
     });
     
@@ -237,7 +243,7 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     const challengeRef = doc(db, 'challenges', challengeId);
     
     await updateDoc(challengeRef, {
-      status: 'cancelled',
+      status: 'cancelled' as const,  // Fix: Use a const assertion
       updatedAt: new Date().toISOString()
     });
     

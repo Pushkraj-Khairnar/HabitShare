@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   collection,
@@ -10,7 +11,8 @@ import {
   query,
   where,
   addDoc,
-  or
+  or,
+  QueryConstraint
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from './AuthContext';
@@ -226,22 +228,27 @@ export function FriendProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Cannot send friend request to yourself');
     }
     
-    // Check if friendship already exists
-    const existingQuery = query(
+    // Check if friendship already exists - Fix: Split the query into multiple where clauses
+    // instead of using `or` which is causing type errors
+    const userToFriendQuery = query(
       collection(db, 'friends'),
-      or(
-        where('userId', '==', currentUser.uid),
-        where('friendId', '==', currentUser.uid)
-      ),
-      or(
-        where('userId', '==', friendId),
-        where('friendId', '==', friendId)
-      )
+      where('userId', '==', currentUser.uid),
+      where('friendId', '==', friendId)
     );
     
-    const existingSnapshot = await getDocs(existingQuery);
+    const friendToUserQuery = query(
+      collection(db, 'friends'),
+      where('userId', '==', friendId),
+      where('friendId', '==', currentUser.uid)
+    );
     
-    if (!existingSnapshot.empty) {
+    // Run both queries and check if either returns results
+    const [userToFriendSnapshot, friendToUserSnapshot] = await Promise.all([
+      getDocs(userToFriendQuery),
+      getDocs(friendToUserQuery)
+    ]);
+    
+    if (!userToFriendSnapshot.empty || !friendToUserSnapshot.empty) {
       throw new Error('Friend request already exists or you are already friends');
     }
     
