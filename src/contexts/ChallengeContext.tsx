@@ -26,18 +26,13 @@ export type Challenge = {
   duration: number; // in days
   startDate: string;
   endDate: string;
-  status: 'pending' | 'active' | 'completed' | 'declined' | 'cancelled';
+  status: 'pending' | 'active' | 'completed' | 'declined' | 'cancelled' | 'failed';
   senderProgress: number;
   receiverProgress: number;
   createdAt: string;
-};
-
-export type UserWithProgress = {
-  id: string;
-  username: string;
-  avatarUrl: string | null;
-  progress: number;
-  wins: number;
+  senderDailyCompletions: string[]; // Array of dates when sender marked complete
+  receiverDailyCompletions: string[]; // Array of dates when receiver marked complete
+  lastCheckedDate: string; // To track when we last checked streak
 };
 
 type ChallengeContextType = {
@@ -101,7 +96,6 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsLoading(true);
       
-      // Query all challenges where current user is involved
       const userChallengesQuery = query(
         collection(db, 'challenges'),
         or(
@@ -124,20 +118,16 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
           ...doc.data()
         } as Challenge;
         
-        // Check if challenge has ended
         const endDate = new Date(challenge.endDate);
         const today = new Date();
         
-        // Fix: Properly cast the status to the specific type
         if (endDate < today && challenge.status === 'active') {
-          // Update to completed status
           updateDoc(doc.ref, { 
             status: 'completed' as const 
           });
           challenge.status = 'completed';
         }
         
-        // Categorize the challenge
         if (challenge.senderId === currentUser.uid && challenge.status === 'pending') {
           sent.push(challenge);
         } else if (challenge.receiverId === currentUser.uid && challenge.status === 'pending') {
@@ -183,10 +173,13 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
       duration: data.duration,
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
-      status: 'pending' as const,  // Fix: Use a const assertion to specify the literal type
+      status: 'pending' as const,
       senderProgress: 0,
       receiverProgress: 0,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      senderDailyCompletions: [],
+      receiverDailyCompletions: [],
+      lastCheckedDate: startDate.toISOString()
     };
     
     const challengeRef = await addDoc(collection(db, 'challenges'), challengeData);
@@ -205,21 +198,19 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     const challengeRef = doc(db, 'challenges', challengeId);
     
     await updateDoc(challengeRef, {
-      status: 'active' as const,  // Fix: Use a const assertion
+      status: 'active' as const,
       updatedAt: new Date().toISOString()
     });
     
-    // Move challenge from received to active
     setReceivedChallenges(prev =>
       prev.filter(c => c.id !== challengeId)
     );
     
     const challenge = receivedChallenges.find(c => c.id === challengeId);
     if (challenge) {
-      // Fix: Properly update the challenge status to ensure type safety
       const updatedChallenge: Challenge = { 
         ...challenge, 
-        status: 'active'  // TypeScript infers this as the literal type
+        status: 'active'
       };
       setActiveChallenges(prev => [updatedChallenge, ...prev]);
     }
@@ -229,11 +220,10 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     const challengeRef = doc(db, 'challenges', challengeId);
     
     await updateDoc(challengeRef, {
-      status: 'declined' as const,  // Fix: Use a const assertion
+      status: 'declined' as const,
       updatedAt: new Date().toISOString()
     });
     
-    // Remove from received challenges
     setReceivedChallenges(prev =>
       prev.filter(c => c.id !== challengeId)
     );
@@ -243,11 +233,10 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     const challengeRef = doc(db, 'challenges', challengeId);
     
     await updateDoc(challengeRef, {
-      status: 'cancelled' as const,  // Fix: Use a const assertion
+      status: 'cancelled' as const,
       updatedAt: new Date().toISOString()
     });
     
-    // Remove from sent or active challenges
     setSentChallenges(prev =>
       prev.filter(c => c.id !== challengeId)
     );
@@ -268,33 +257,97 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     }
     
     const challengeData = challenge.data() as Challenge;
+    const today = new Date().toISOString().split('T')[0];
     
-    // Update the progress for the current user
     if (challengeData.senderId === currentUser.uid) {
+      const updatedCompletions = [...(challengeData.senderDailyCompletions || [])];
+      if (!updatedCompletions.includes(today)) {
+        updatedCompletions.push(today);
+      }
+      
       await updateDoc(challengeRef, {
         senderProgress: progress,
+        senderDailyCompletions: updatedCompletions,
         updatedAt: new Date().toISOString()
       });
       
-      // Update local state
       setActiveChallenges(prev =>
         prev.map(c =>
-          c.id === challengeId ? { ...c, senderProgress: progress } : c
+          c.id === challengeId ? { 
+            ...c, 
+            senderProgress: progress,
+            senderDailyCompletions: updatedCompletions
+          } : c
         )
       );
     } else {
+      const updatedCompletions = [...(challengeData.receiverDailyCompletions || [])];
+      if (!updatedCompletions.includes(today)) {
+        updatedCompletions.push(today);
+      }
+      
       await updateDoc(challengeRef, {
         receiverProgress: progress,
+        receiverDailyCompletions: updatedCompletions,
         updatedAt: new Date().toISOString()
       });
       
-      // Update local state
       setActiveChallenges(prev =>
         prev.map(c =>
-          c.id === challengeId ? { ...c, receiverProgress: progress } : c
+          c.id === challengeId ? { 
+            ...c, 
+            receiverProgress: progress,
+            receiverDailyCompletions: updatedCompletions
+          } : c
         )
       );
     }
+    
+    await checkAndUpdateStreak(challengeRef, {
+      ...challengeData,
+      id: challengeId,
+      senderDailyCompletions: challengeData.senderDailyCompletions || [],
+      receiverDailyCompletions: challengeData.receiverDailyCompletions || []
+    });
+  };
+
+  const checkAndUpdateStreak = async (challengeRef: any, challenge: Challenge) => {
+    const today = new Date();
+    const startDate = new Date(challenge.startDate);
+    const lastChecked = new Date(challenge.lastCheckedDate || challenge.startDate);
+    
+    if (lastChecked.toDateString() === today.toDateString()) {
+      return;
+    }
+    
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const bothCompletedYesterday = 
+      challenge.senderDailyCompletions.includes(yesterdayStr) &&
+      challenge.receiverDailyCompletions.includes(yesterdayStr);
+    
+    if (!bothCompletedYesterday && yesterday >= startDate) {
+      await updateDoc(challengeRef, {
+        status: 'failed',
+        lastCheckedDate: today.toISOString()
+      });
+      return;
+    }
+    
+    const endDate = new Date(challenge.endDate);
+    if (today >= endDate) {
+      await updateDoc(challengeRef, {
+        status: 'completed',
+        lastCheckedDate: today.toISOString()
+      });
+      return;
+    }
+    
+    await updateDoc(challengeRef, {
+      lastCheckedDate: today.toISOString()
+    });
   };
 
   const getChallengeUsers = async (challenge: Challenge) => {
@@ -303,10 +356,8 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
       getDoc(doc(db, 'users', challenge.receiverId))
     ]);
     
-    // Count wins from completed challenges
     const wins = await getChallengeWins();
     
-    // Return user data with progress
     return {
       sender: {
         id: challenge.senderId,
@@ -325,7 +376,6 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     };
   };
 
-  // Get total number of challenge wins for all users
   const getChallengeWins = async () => {
     if (!currentUser) return {};
     
@@ -341,13 +391,11 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     completedSnapshot.forEach(doc => {
       const challenge = doc.data() as Challenge;
       
-      // Determine the winner (or tie)
       if (challenge.senderProgress > challenge.receiverProgress) {
         wins[challenge.senderId] = (wins[challenge.senderId] || 0) + 1;
       } else if (challenge.receiverProgress > challenge.senderProgress) {
         wins[challenge.receiverId] = (wins[challenge.receiverId] || 0) + 1;
       } else {
-        // Tie - both get half a point
         wins[challenge.senderId] = (wins[challenge.senderId] || 0) + 0.5;
         wins[challenge.receiverId] = (wins[challenge.receiverId] || 0) + 0.5;
       }
