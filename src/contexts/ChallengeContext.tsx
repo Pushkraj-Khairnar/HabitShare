@@ -105,6 +105,7 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     
     try {
       setIsLoading(true);
+      console.log('Fetching challenges for user:', currentUser.uid);
       
       const userChallengesQuery = query(
         collection(db, 'challenges'),
@@ -122,11 +123,15 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
       const active: Challenge[] = [];
       const completed: Challenge[] = [];
       
+      console.log('Found challenges:', challengesSnapshot.size);
+      
       challengesSnapshot.forEach(doc => {
         const challenge = {
           id: doc.id,
           ...doc.data()
         } as Challenge;
+        
+        console.log('Challenge:', challenge.id, 'Status:', challenge.status, 'SenderId:', challenge.senderId, 'ReceiverId:', challenge.receiverId);
         
         const endDate = new Date(challenge.endDate);
         const today = new Date();
@@ -140,14 +145,21 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
         
         if (challenge.senderId === currentUser.uid && challenge.status === 'pending') {
           sent.push(challenge);
+          console.log('Added to sent challenges');
         } else if (challenge.receiverId === currentUser.uid && challenge.status === 'pending') {
           received.push(challenge);
+          console.log('Added to received challenges');
         } else if (challenge.status === 'active') {
           active.push(challenge);
+          console.log('Added to active challenges');
         } else if (challenge.status === 'completed') {
           completed.push(challenge);
+          console.log('Added to completed challenges');
         }
       });
+      
+      console.log('Final counts - Sent:', sent.length, 'Received:', received.length, 
+                 'Active:', active.length, 'Completed:', completed.length);
       
       setSentChallenges(sent);
       setReceivedChallenges(received);
