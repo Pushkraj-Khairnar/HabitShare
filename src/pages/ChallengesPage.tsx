@@ -52,14 +52,18 @@ const ChallengesPage = () => {
   // Fetch users for active challenges
   useEffect(() => {
     const fetchChallengeUsers = async () => {
-      const usersData: Record<string, { sender: any, receiver: any }> = {};
-      
-      for (const challenge of activeChallenges) {
-        const users = await getChallengeUsers(challenge);
-        usersData[challenge.id] = users;
+      try {
+        const usersData: Record<string, { sender: any, receiver: any }> = {};
+        
+        for (const challenge of activeChallenges) {
+          const users = await getChallengeUsers(challenge);
+          usersData[challenge.id] = users;
+        }
+        
+        setChallengeUsers(usersData);
+      } catch (error) {
+        console.error('Error fetching challenge users:', error);
       }
-      
-      setChallengeUsers(usersData);
     };
     
     if (activeChallenges.length > 0) {
@@ -69,8 +73,21 @@ const ChallengesPage = () => {
 
   // Add an effect to refresh challenges when the page loads
   useEffect(() => {
-    refreshChallenges();
-  }, [refreshChallenges]);
+    const loadChallenges = async () => {
+      try {
+        await refreshChallenges();
+      } catch (error) {
+        console.error('Error refreshing challenges:', error);
+        toast({
+          title: 'Error loading challenges',
+          description: 'Please try again later',
+          variant: 'destructive',
+        });
+      }
+    };
+    
+    loadChallenges();
+  }, [refreshChallenges, toast]);
   
   const handleCreateChallenge = async (e: React.FormEvent) => {
     e.preventDefault();

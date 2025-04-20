@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   collection,
@@ -10,7 +11,6 @@ import {
   query,
   where,
   addDoc,
-  or,
   orderBy
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -101,17 +101,25 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsLoading(true);
       
-      // Query all challenges where current user is involved
-      const userChallengesQuery = query(
+      // Fix: Split into separate queries to avoid composite index issues
+      // Query sent challenges
+      const sentChallengesQuery = query(
         collection(db, 'challenges'),
-        or(
-          where('senderId', '==', currentUser.uid),
-          where('receiverId', '==', currentUser.uid)
-        ),
+        where('senderId', '==', currentUser.uid),
         orderBy('createdAt', 'desc')
       );
       
-      const challengesSnapshot = await getDocs(userChallengesQuery);
+      // Query received challenges
+      const receivedChallengesQuery = query(
+        collection(db, 'challenges'),
+        where('receiverId', '==', currentUser.uid),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const [sentSnapshot, receivedSnapshot] = await Promise.all([
+        getDocs(sentChallengesQuery),
+        getDocs(receivedChallengesQuery)
+      ]);
       
       const sent: Challenge[] = [];
       const received: Challenge[] = [];
@@ -120,7 +128,8 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
       
       const updatePromises: Promise<void>[] = [];
       
-      challengesSnapshot.forEach(doc => {
+      // Process sent challenges
+      sentSnapshot.forEach(doc => {
         const challenge = {
           id: doc.id,
           ...doc.data()
@@ -130,7 +139,6 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
         const endDate = new Date(challenge.endDate);
         const today = new Date();
         
-        // Fix: Properly cast the status to the specific type
         if (endDate < today && challenge.status === 'active') {
           // Update to completed status
           const updatePromise = updateDoc(doc.ref, { 
@@ -141,9 +149,37 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
         }
         
         // Categorize the challenge
-        if (challenge.senderId === currentUser.uid && challenge.status === 'pending') {
+        if (challenge.status === 'pending') {
           sent.push(challenge);
-        } else if (challenge.receiverId === currentUser.uid && challenge.status === 'pending') {
+        } else if (challenge.status === 'active') {
+          active.push(challenge);
+        } else if (challenge.status === 'completed') {
+          completed.push(challenge);
+        }
+      });
+      
+      // Process received challenges
+      receivedSnapshot.forEach(doc => {
+        const challenge = {
+          id: doc.id,
+          ...doc.data()
+        } as Challenge;
+        
+        // Check if challenge has ended
+        const endDate = new Date(challenge.endDate);
+        const today = new Date();
+        
+        if (endDate < today && challenge.status === 'active') {
+          // Update to completed status
+          const updatePromise = updateDoc(doc.ref, { 
+            status: 'completed' as const 
+          });
+          updatePromises.push(updatePromise);
+          challenge.status = 'completed';
+        }
+        
+        // Categorize the challenge
+        if (challenge.status === 'pending') {
           received.push(challenge);
         } else if (challenge.status === 'active') {
           active.push(challenge);
@@ -191,7 +227,7 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
       duration: data.duration,
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
-      status: 'pending' as const,  // Fix: Use a const assertion to specify the literal type
+      status: 'pending' as const,
       senderProgress: 0,
       receiverProgress: 0,
       createdAt: new Date().toISOString()
@@ -202,8 +238,9 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     const newChallenge = {
       id: challengeRef.id,
       ...challengeData
-    } as Challenge;
+    };
     
+    // Update the sent challenges state
     setSentChallenges(prev => [newChallenge, ...prev]);
     
     return newChallenge;
@@ -213,7 +250,7 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     const challengeRef = doc(db, 'challenges', challengeId);
     
     await updateDoc(challengeRef, {
-      status: 'active' as const,  // Fix: Use a const assertion
+      status: 'active' as const,
       updatedAt: new Date().toISOString()
     });
     
@@ -225,7 +262,7 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     const challengeRef = doc(db, 'challenges', challengeId);
     
     await updateDoc(challengeRef, {
-      status: 'declined' as const,  // Fix: Use a const assertion
+      status: 'declined' as const,
       updatedAt: new Date().toISOString()
     });
     
@@ -237,7 +274,7 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     const challengeRef = doc(db, 'challenges', challengeId);
     
     await updateDoc(challengeRef, {
-      status: 'cancelled' as const,  // Fix: Use a const assertion
+      status: 'cancelled' as const,
       updatedAt: new Date().toISOString()
     });
     
