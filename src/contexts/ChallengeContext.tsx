@@ -101,19 +101,17 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsLoading(true);
       
-      // Fix: Split into separate queries to avoid composite index issues
-      // Query sent challenges
+      // Fix: Use simpler queries without composite indexes
+      // Query sent challenges without ordering
       const sentChallengesQuery = query(
         collection(db, 'challenges'),
-        where('senderId', '==', currentUser.uid),
-        orderBy('createdAt', 'desc')
+        where('senderId', '==', currentUser.uid)
       );
       
-      // Query received challenges
+      // Query received challenges without ordering
       const receivedChallengesQuery = query(
         collection(db, 'challenges'),
-        where('receiverId', '==', currentUser.uid),
-        orderBy('createdAt', 'desc')
+        where('receiverId', '==', currentUser.uid)
       );
       
       const [sentSnapshot, receivedSnapshot] = await Promise.all([
@@ -193,10 +191,15 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
         await Promise.all(updatePromises);
       }
       
-      setSentChallenges(sent);
-      setReceivedChallenges(received);
-      setActiveChallenges(active);
-      setCompletedChallenges(completed);
+      // Sort challenges by createdAt date (newest first) after fetching
+      const sortByDate = (a: Challenge, b: Challenge) => {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      };
+      
+      setSentChallenges(sent.sort(sortByDate));
+      setReceivedChallenges(received.sort(sortByDate));
+      setActiveChallenges(active.sort(sortByDate));
+      setCompletedChallenges(completed.sort(sortByDate));
     } catch (error) {
       console.error('Error fetching challenges:', error);
     } finally {

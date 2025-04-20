@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useChallenges, Challenge } from '@/contexts/ChallengeContext';
 import { useFriends } from '@/contexts/FriendContext';
@@ -14,9 +13,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Slider } from '@/components/ui/slider';
-import { format, addDays } from 'date-fns';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { Calendar as CalendarIcon, Trophy, Plus, UserCheck } from 'lucide-react';
+import { Calendar as CalendarIcon, Trophy, Plus, UserCheck, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -45,6 +44,7 @@ const ChallengesPage = () => {
   const [duration, setDuration] = useState<number>(7);
   const [startDate, setStartDate] = useState<Date>(new Date());
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   
   // Store challenge participants
   const [challengeUsers, setChallengeUsers] = useState<Record<string, { sender: any, receiver: any }>>({});
@@ -75,9 +75,11 @@ const ChallengesPage = () => {
   useEffect(() => {
     const loadChallenges = async () => {
       try {
+        setRefreshError(null);
         await refreshChallenges();
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error refreshing challenges:', error);
+        setRefreshError(error.message || 'Failed to load challenges');
         toast({
           title: 'Error loading challenges',
           description: 'Please try again later',
@@ -88,107 +90,6 @@ const ChallengesPage = () => {
     
     loadChallenges();
   }, [refreshChallenges, toast]);
-  
-  const handleCreateChallenge = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!selectedFriendId) {
-      toast({
-        title: 'Select a friend',
-        description: 'Please select a friend to challenge',
-        variant: 'destructive',
-      });
-      return;
-    }
-    
-    try {
-      setIsSubmitting(true);
-      
-      await createChallenge({
-        receiverId: selectedFriendId,
-        habitName,
-        description,
-        frequency,
-        duration,
-        startDate: startDate.toISOString(),
-      });
-      
-      toast({
-        title: 'Challenge sent!',
-        description: 'Your friend will need to accept the challenge to start.',
-      });
-      
-      // Reset form
-      setSelectedFriendId('');
-      setHabitName('');
-      setDescription('');
-      setFrequency('daily');
-      setDuration(7);
-      setStartDate(new Date());
-      setIsDialogOpen(false);
-      
-      // Refresh challenges after creating a new one
-      await refreshChallenges();
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to create challenge',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-  
-  const handleUpdateProgress = async (challengeId: string, progress: number) => {
-    try {
-      await updateProgress(challengeId, progress);
-      toast({
-        title: 'Progress updated',
-        description: 'Your challenge progress has been updated',
-      });
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to update progress',
-        variant: 'destructive',
-      });
-    }
-  };
-  
-  const handleAcceptChallenge = async (challengeId: string) => {
-    try {
-      await acceptChallenge(challengeId);
-      toast({
-        title: 'Challenge accepted!',
-        description: 'The challenge has been added to your active challenges.',
-      });
-      await refreshChallenges();
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to accept challenge',
-        variant: 'destructive',
-      });
-    }
-  };
-  
-  const handleDeclineChallenge = async (challengeId: string) => {
-    try {
-      await declineChallenge(challengeId);
-      toast({
-        title: 'Challenge declined',
-        description: 'The challenge has been declined.',
-      });
-      await refreshChallenges();
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to decline challenge',
-        variant: 'destructive',
-      });
-    }
-  };
   
   const renderChallengeCard = (challenge: Challenge) => {
     const users = challengeUsers[challenge.id];
@@ -436,9 +337,19 @@ const ChallengesPage = () => {
         </Dialog>
       </div>
       
-      {isLoading ? (
+      {refreshError ? (
+        <div className="text-center py-8 border rounded-lg bg-white">
+          <AlertCircle className="h-10 w-10 mx-auto text-red-500 mb-2" />
+          <h3 className="text-lg font-medium mb-2">Error Loading Challenges</h3>
+          <p className="text-muted-foreground mb-4">{refreshError}</p>
+          <Button onClick={() => refreshChallenges()}>Try Again</Button>
+        </div>
+      ) : isLoading ? (
         <div className="flex justify-center py-8">
-          <p className="text-muted-foreground">Loading challenges...</p>
+          <div className="text-center">
+            <div className="w-8 h-8 border-4 border-t-habit-purple rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading challenges...</p>
+          </div>
         </div>
       ) : (
         <Tabs defaultValue="active" className="w-full">
