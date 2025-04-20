@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   collection,
@@ -83,16 +82,32 @@ export function FriendProvider({ children }: { children: React.ReactNode }) {
       // Query all friendships where current user is involved
       const userFriendshipsQuery = query(
         collection(db, 'friends'),
-        or(
-          where('userId', '==', currentUser.uid),
-          where('friendId', '==', currentUser.uid)
-        )
+        where('userId', '==', currentUser.uid)
       );
       
-      const friendshipsSnapshot = await getDocs(userFriendshipsQuery);
+      const friendFriendshipsQuery = query(
+        collection(db, 'friends'),
+        where('friendId', '==', currentUser.uid)
+      );
+      
+      // Execute both queries
+      const [userSnapshot, friendSnapshot] = await Promise.all([
+        getDocs(userFriendshipsQuery),
+        getDocs(friendFriendshipsQuery)
+      ]);
+      
       const friendshipsList: Friend[] = [];
       
-      friendshipsSnapshot.forEach(doc => {
+      // Process results from first query
+      userSnapshot.forEach(doc => {
+        friendshipsList.push({
+          id: doc.id,
+          ...doc.data()
+        } as Friend);
+      });
+      
+      // Process results from second query
+      friendSnapshot.forEach(doc => {
         friendshipsList.push({
           id: doc.id,
           ...doc.data()

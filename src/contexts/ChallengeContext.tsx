@@ -131,7 +131,7 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
         
         if (endDate < today && challenge.status === 'active') {
           // Challenge has ended, update status to completed
-          updateDoc(doc.ref, { status: 'completed' });
+          updateDoc(doc.ref, { status: 'completed' as const });
           challenge.status = 'completed';
         }
         
