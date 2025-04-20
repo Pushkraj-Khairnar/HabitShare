@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import { useState, useEffect } from 'react';
 import { useChallenges, Challenge } from '@/contexts/ChallengeContext';
 import { useFriends } from '@/contexts/FriendContext';
 import { Button } from '@/components/ui/button';
@@ -13,9 +14,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Slider } from '@/components/ui/slider';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { Calendar as CalendarIcon, Trophy, Plus, UserCheck, AlertCircle } from 'lucide-react';
+import { Calendar as CalendarIcon, Trophy, Plus, UserCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -30,7 +31,6 @@ const ChallengesPage = () => {
     declineChallenge,
     updateProgress,
     getChallengeUsers,
-    refreshChallenges,
     isLoading 
   } = useChallenges();
   const { friends } = useFriends();
@@ -44,74 +44,40 @@ const ChallengesPage = () => {
   const [duration, setDuration] = useState<number>(7);
   const [startDate, setStartDate] = useState<Date>(new Date());
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [refreshError, setRefreshError] = useState<string | null>(null);
   
+  // Store challenge participants
   const [challengeUsers, setChallengeUsers] = useState<Record<string, { sender: any, receiver: any }>>({});
-
+  
+  // Fetch users for active challenges
   useEffect(() => {
     const fetchChallengeUsers = async () => {
-      try {
-        const usersData: Record<string, { sender: any, receiver: any }> = {};
-        
-        for (const challenge of activeChallenges) {
-          const users = await getChallengeUsers(challenge);
-          usersData[challenge.id] = users;
-        }
-        
-        setChallengeUsers(usersData);
-      } catch (error) {
-        console.error('Error fetching challenge users:', error);
+      const usersData: Record<string, { sender: any, receiver: any }> = {};
+      
+      for (const challenge of activeChallenges) {
+        const users = await getChallengeUsers(challenge);
+        usersData[challenge.id] = users;
       }
+      
+      setChallengeUsers(usersData);
     };
     
     if (activeChallenges.length > 0) {
       fetchChallengeUsers();
     }
   }, [activeChallenges, getChallengeUsers]);
-
-  useEffect(() => {
-    const loadChallenges = async () => {
-      try {
-        setRefreshError(null);
-        await refreshChallenges();
-      } catch (error: any) {
-        console.error('Error refreshing challenges:', error);
-        setRefreshError(error.message || 'Failed to load challenges');
-        toast({
-          title: 'Error loading challenges',
-          description: 'Please try again later',
-          variant: 'destructive',
-        });
-      }
-    };
-    
-    loadChallenges();
-  }, [refreshChallenges, toast]);
-
-  const handleUpdateProgress = (challengeId: string, progress: number) => {
-    updateProgress(challengeId, progress);
-  };
-
-  const handleDeclineChallenge = (challengeId: string) => {
-    declineChallenge(challengeId);
-  };
-
-  const handleAcceptChallenge = (challengeId: string) => {
-    acceptChallenge(challengeId);
-  };
-
-  const handleCreateChallenge = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  
+  const handleCreateChallenge = async (e: React.FormEvent) => {
+    e.preventDefault();
     
     if (!selectedFriendId) {
       toast({
-        title: 'Error',
+        title: 'Select a friend',
         description: 'Please select a friend to challenge',
         variant: 'destructive',
       });
       return;
     }
-
+    
     try {
       setIsSubmitting(true);
       
@@ -121,9 +87,15 @@ const ChallengesPage = () => {
         description,
         frequency,
         duration,
-        startDate: startDate.toISOString()
+        startDate: startDate.toISOString(),
       });
-
+      
+      toast({
+        title: 'Challenge sent!',
+        description: 'Your friend will need to accept the challenge to start.',
+      });
+      
+      // Reset form
       setSelectedFriendId('');
       setHabitName('');
       setDescription('');
@@ -131,23 +103,33 @@ const ChallengesPage = () => {
       setDuration(7);
       setStartDate(new Date());
       setIsDialogOpen(false);
-
-      toast({
-        title: 'Challenge Created',
-        description: 'Your challenge has been sent to your friend!',
-      });
-    } catch (error) {
-      console.error('Error creating challenge:', error);
+    } catch (error: any) {
       toast({
         title: 'Error',
-        description: 'Failed to create challenge. Please try again.',
+        description: error.message || 'Failed to create challenge',
         variant: 'destructive',
       });
     } finally {
       setIsSubmitting(false);
     }
   };
-
+  
+  const handleUpdateProgress = async (challengeId: string, progress: number) => {
+    try {
+      await updateProgress(challengeId, progress);
+      toast({
+        title: 'Progress updated',
+        description: 'Your challenge progress has been updated',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update progress',
+        variant: 'destructive',
+      });
+    }
+  };
+  
   const renderChallengeCard = (challenge: Challenge) => {
     const users = challengeUsers[challenge.id];
     
@@ -214,7 +196,7 @@ const ChallengesPage = () => {
       </Card>
     );
   };
-
+  
   const renderPendingCard = (challenge: Challenge, isPending: boolean) => (
     <Card key={challenge.id} className="mb-4">
       <CardHeader className="pb-2">
@@ -232,12 +214,12 @@ const ChallengesPage = () => {
         <CardFooter className="flex space-x-2">
           <Button 
             variant="outline" 
-            onClick={() => handleDeclineChallenge(challenge.id)}
+            onClick={() => declineChallenge(challenge.id)}
           >
             Decline
           </Button>
           <Button 
-            onClick={() => handleAcceptChallenge(challenge.id)}
+            onClick={() => acceptChallenge(challenge.id)}
           >
             Accept
           </Button>
@@ -394,19 +376,9 @@ const ChallengesPage = () => {
         </Dialog>
       </div>
       
-      {refreshError ? (
-        <div className="text-center py-8 border rounded-lg bg-white">
-          <AlertCircle className="h-10 w-10 mx-auto text-red-500 mb-2" />
-          <h3 className="text-lg font-medium mb-2">Error Loading Challenges</h3>
-          <p className="text-muted-foreground mb-4">{refreshError}</p>
-          <Button onClick={() => refreshChallenges()}>Try Again</Button>
-        </div>
-      ) : isLoading ? (
+      {isLoading ? (
         <div className="flex justify-center py-8">
-          <div className="text-center">
-            <div className="w-8 h-8 border-4 border-t-habit-purple rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Loading challenges...</p>
-          </div>
+          <p className="text-muted-foreground">Loading challenges...</p>
         </div>
       ) : (
         <Tabs defaultValue="active" className="w-full">
