@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useChallenges, Challenge } from '@/contexts/ChallengeContext';
 import { useFriends } from '@/contexts/FriendContext';
 import { Button } from '@/components/ui/button';
@@ -46,10 +46,8 @@ const ChallengesPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   
-  // Store challenge participants
   const [challengeUsers, setChallengeUsers] = useState<Record<string, { sender: any, receiver: any }>>({});
-  
-  // Fetch users for active challenges
+
   useEffect(() => {
     const fetchChallengeUsers = async () => {
       try {
@@ -71,7 +69,6 @@ const ChallengesPage = () => {
     }
   }, [activeChallenges, getChallengeUsers]);
 
-  // Add an effect to refresh challenges when the page loads
   useEffect(() => {
     const loadChallenges = async () => {
       try {
@@ -90,7 +87,67 @@ const ChallengesPage = () => {
     
     loadChallenges();
   }, [refreshChallenges, toast]);
-  
+
+  const handleUpdateProgress = (challengeId: string, progress: number) => {
+    updateProgress(challengeId, progress);
+  };
+
+  const handleDeclineChallenge = (challengeId: string) => {
+    declineChallenge(challengeId);
+  };
+
+  const handleAcceptChallenge = (challengeId: string) => {
+    acceptChallenge(challengeId);
+  };
+
+  const handleCreateChallenge = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    
+    if (!selectedFriendId) {
+      toast({
+        title: 'Error',
+        description: 'Please select a friend to challenge',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      
+      await createChallenge({
+        receiverId: selectedFriendId,
+        habitName,
+        description,
+        frequency,
+        duration,
+        startDate: startDate.toISOString()
+      });
+
+      setSelectedFriendId('');
+      setHabitName('');
+      setDescription('');
+      setFrequency('daily');
+      setDuration(7);
+      setStartDate(new Date());
+      setIsDialogOpen(false);
+
+      toast({
+        title: 'Challenge Created',
+        description: 'Your challenge has been sent to your friend!',
+      });
+    } catch (error) {
+      console.error('Error creating challenge:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to create challenge. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const renderChallengeCard = (challenge: Challenge) => {
     const users = challengeUsers[challenge.id];
     
@@ -157,7 +214,7 @@ const ChallengesPage = () => {
       </Card>
     );
   };
-  
+
   const renderPendingCard = (challenge: Challenge, isPending: boolean) => (
     <Card key={challenge.id} className="mb-4">
       <CardHeader className="pb-2">
