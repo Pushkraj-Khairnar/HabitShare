@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   collection,
@@ -33,6 +34,15 @@ export type Challenge = {
   senderDailyCompletions: string[]; // Array of dates when sender marked complete
   receiverDailyCompletions: string[]; // Array of dates when receiver marked complete
   lastCheckedDate: string; // To track when we last checked streak
+};
+
+// Define the UserWithProgress type that was missing
+export type UserWithProgress = {
+  id: string;
+  username: string;
+  avatarUrl: string | null;
+  progress: number;
+  wins: number;
 };
 
 type ChallengeContextType = {
