@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss";
 
 export default {
@@ -61,7 +62,17 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
-				}
+				},
+				// HabitShare custom colors
+				'habit-purple': {
+					DEFAULT: '#9b87f5',
+					dark: '#7E69AB',
+					light: '#D6BCFA'
+				},
+				'habit-success': '#4caf50',
+				'habit-warning': '#ff9800',
+				'habit-error': '#f44336',
+				'habit-gray': '#8E9196'
 			},
 			borderRadius: {
 				lg: 'var(--radius)',
@@ -84,11 +95,16 @@ export default {
 					to: {
 						height: '0'
 					}
+				},
+				'pulse-success': {
+					'0%, 100%': { transform: 'scale(1)' },
+					'50%': { transform: 'scale(1.1)' },
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
-				'accordion-up': 'accordion-up 0.2s ease-out'
+				'accordion-up': 'accordion-up 0.2s ease-out',
+				'pulse-success': 'pulse-success 0.5s ease-in-out'
 			}
 		}
 	},
