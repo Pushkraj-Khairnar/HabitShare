@@ -49,10 +49,8 @@ const ChallengesPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   
-  // Store challenge participants
   const [challengeUsers, setChallengeUsers] = useState<Record<string, { sender: any, receiver: any }>>({});
   
-  // Auto-refresh on initial load and after creation
   useEffect(() => {
     const loadData = async () => {
       await refreshChallenges();
@@ -61,7 +59,6 @@ const ChallengesPage = () => {
     loadData();
   }, []);
   
-  // Fetch users for active challenges
   useEffect(() => {
     const fetchChallengeUsers = async () => {
       const usersData: Record<string, { sender: any, receiver: any }> = {};
@@ -108,7 +105,6 @@ const ChallengesPage = () => {
         description: 'Your friend will need to accept the challenge to start.',
       });
       
-      // Reset form
       setSelectedFriendId('');
       setHabitName('');
       setDescription('');
@@ -117,7 +113,6 @@ const ChallengesPage = () => {
       setStartDate(new Date());
       setIsDialogOpen(false);
       
-      // Refresh challenges to show the new one
       await refreshChallenges();
     } catch (error: any) {
       toast({
@@ -152,7 +147,6 @@ const ChallengesPage = () => {
         title: 'Challenge accepted',
         description: 'Good luck with your challenge!',
       });
-      // Refresh to update the UI
       await refreshChallenges();
     } catch (error: any) {
       toast({
@@ -170,7 +164,6 @@ const ChallengesPage = () => {
         title: 'Challenge declined',
         description: 'The challenge has been declined',
       });
-      // Refresh to update the UI
       await refreshChallenges();
     } catch (error: any) {
       toast({
@@ -201,12 +194,10 @@ const ChallengesPage = () => {
     const users = challengeUsers[challenge.id];
     const today = startOfToday();
     
-    // Get last 7 days
     const last7Days = Array.from({ length: 7 }, (_, i) => {
       return format(subDays(today, 6 - i), 'yyyy-MM-dd');
     });
     
-    // Check if the current user is the sender
     const isSender = users?.sender.id === currentUser?.uid;
     const userCompletions = isSender 
       ? challenge.senderDailyCompletions 
