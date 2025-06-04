@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { 
   collection, 
@@ -66,9 +65,11 @@ export function HabitProvider({ children }: { children: React.ReactNode }) {
 
   // Fetch user's habits
   useEffect(() => {
+    console.log('HabitContext useEffect triggered, currentUser:', currentUser?.uid);
     if (currentUser) {
       fetchHabits();
     } else {
+      console.log('No current user, clearing habits');
       setHabits([]);
       setHabitLogs({});
       setIsLoading(false);
@@ -78,43 +79,60 @@ export function HabitProvider({ children }: { children: React.ReactNode }) {
   // Fetch habits from Firestore
   const fetchHabits = async () => {
     try {
+      console.log('Starting fetchHabits for user:', currentUser?.uid);
       setIsLoading(true);
-      if (!currentUser) return;
+      if (!currentUser) {
+        console.log('No current user in fetchHabits');
+        return;
+      }
 
+      console.log('Creating habits query...');
       const habitsQuery = query(
         collection(db, 'habits'),
-        where('userId', '==', currentUser.uid),
-        orderBy('createdAt', 'desc')
+        where('userId', '==', currentUser.uid)
       );
 
+      console.log('Executing habits query...');
       const querySnapshot = await getDocs(habitsQuery);
+      console.log('Query executed, found', querySnapshot.size, 'habits');
       
       const habitsData: Habit[] = [];
       const logsData: Record<string, HabitLog[]> = {};
       
       // Get all habits
       querySnapshot.forEach((doc) => {
-        const habit = { id: doc.id, ...doc.data() } as Habit;
+        const habitData = doc.data();
+        console.log('Processing habit:', doc.id, habitData);
+        const habit = { id: doc.id, ...habitData } as Habit;
         habitsData.push(habit);
       });
       
+      console.log('Processed habits data:', habitsData);
+      
       // Get habit logs for each habit
       for (const habit of habitsData) {
+        console.log('Fetching logs for habit:', habit.id);
         const logs = await getHabitLogs(habit.id);
         logsData[habit.id] = logs;
+        console.log('Fetched logs for habit', habit.id, ':', logs.length, 'logs');
       }
       
+      console.log('Setting habits and logs in state');
       setHabits(habitsData);
       setHabitLogs(logsData);
+      console.log('Habits state updated, total habits:', habitsData.length);
     } catch (error) {
       console.error('Error fetching habits:', error);
+      // Don't throw the error, just log it and continue
     } finally {
       setIsLoading(false);
+      console.log('fetchHabits completed, isLoading set to false');
     }
   };
 
   // Refresh habits data
   const refreshHabits = async () => {
+    console.log('Refreshing habits...');
     await fetchHabits();
   };
 
@@ -122,6 +140,7 @@ export function HabitProvider({ children }: { children: React.ReactNode }) {
   const createHabit = async (habitData: Omit<Habit, 'id' | 'userId' | 'createdAt' | 'currentStreak' | 'bestStreak'>) => {
     if (!currentUser) throw new Error('User must be logged in');
     
+    console.log('Creating new habit:', habitData);
     const newHabit = {
       ...habitData,
       userId: currentUser.uid,
@@ -131,6 +150,7 @@ export function HabitProvider({ children }: { children: React.ReactNode }) {
     };
     
     const habitRef = await addDoc(collection(db, 'habits'), newHabit);
+    console.log('Habit created with ID:', habitRef.id);
     
     const createdHabit = {
       id: habitRef.id,
@@ -248,25 +268,30 @@ export function HabitProvider({ children }: { children: React.ReactNode }) {
 
   // Get habit logs for a specific habit
   const getHabitLogs = async (habitId: string, startDate?: string, endDate?: string): Promise<HabitLog[]> => {
-    let logsQuery = query(
-      collection(db, 'habitLogs'),
-      where('habitId', '==', habitId)
-    );
-    
-    if (startDate) {
-      logsQuery = query(logsQuery, where('date', '>=', startDate));
+    try {
+      let logsQuery = query(
+        collection(db, 'habitLogs'),
+        where('habitId', '==', habitId)
+      );
+      
+      if (startDate) {
+        logsQuery = query(logsQuery, where('date', '>=', startDate));
+      }
+      
+      if (endDate) {
+        logsQuery = query(logsQuery, where('date', '<=', endDate));
+      }
+      
+      const querySnapshot = await getDocs(logsQuery);
+      
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as HabitLog));
+    } catch (error) {
+      console.error('Error fetching habit logs:', error);
+      return [];
     }
-    
-    if (endDate) {
-      logsQuery = query(logsQuery, where('date', '<=', endDate));
-    }
-    
-    const querySnapshot = await getDocs(logsQuery);
-    
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    } as HabitLog));
   };
 
   // Calculate and update habit streaks
