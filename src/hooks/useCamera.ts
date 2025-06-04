@@ -43,60 +43,36 @@ export function useCamera() {
       const blob = await response.blob();
       console.log('Blob created, size:', blob.size, 'type:', blob.type);
       
-      // Convert blob to base64 for ImageBB
-      const base64 = await new Promise<string>((resolve, reject) => {
+      // Convert blob to data URL for local storage and display
+      const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => {
           const result = reader.result as string;
           if (!result) {
-            reject(new Error('Failed to convert to base64'));
+            reject(new Error('Failed to convert to data URL'));
             return;
           }
-          // Remove data:image/jpeg;base64, prefix
-          const base64Data = result.split(',')[1];
-          resolve(base64Data);
+          resolve(result);
         };
         reader.onerror = () => reject(new Error('FileReader error'));
         reader.readAsDataURL(blob);
       });
 
-      console.log('Base64 conversion complete, length:', base64.length);
+      console.log('Data URL conversion complete, length:', dataUrl.length);
 
-      // Create FormData for ImageBB API
-      const formData = new FormData();
-      formData.append('image', base64);
-      formData.append('name', `challenge_${challengeId}_${userId}_${Date.now()}`);
-
-      console.log('Sending request to ImageBB API...');
+      // Store in localStorage for persistence (in a real app, this would be uploaded to your backend)
+      const storageKey = `photo_${challengeId}_${userId}_${Date.now()}`;
+      localStorage.setItem(storageKey, dataUrl);
       
-      const imageBBResponse = await fetch('https://api.imgbb.com/1/upload?key=d139b80db1d7b0e4c9bfa4923165cbc6', {
-        method: 'POST',
-        body: formData,
-      });
+      console.log('Photo stored locally with key:', storageKey);
 
-      console.log('ImageBB response status:', imageBBResponse.status);
-      
-      if (!imageBBResponse.ok) {
-        const errorText = await imageBBResponse.text();
-        console.error('ImageBB API error:', errorText);
-        throw new Error(`ImageBB upload failed: ${imageBBResponse.status} - ${errorText}`);
-      }
-
-      const imageBBData = await imageBBResponse.json();
-      console.log('ImageBB response:', imageBBData);
-      
-      if (!imageBBData.success) {
-        console.error('ImageBB upload unsuccessful:', imageBBData);
-        throw new Error(`ImageBB upload failed: ${imageBBData.error?.message || 'Unknown error'}`);
-      }
-
-      console.log('Upload successful, image URL:', imageBBData.data.url);
-      return imageBBData.data.url;
+      // Return the data URL for immediate display
+      return dataUrl;
     } catch (error) {
-      console.error('Error uploading photo:', error);
+      console.error('Error processing photo:', error);
       toast({
         title: 'Upload Error',
-        description: error instanceof Error ? error.message : 'Failed to upload photo. Please try again.',
+        description: 'Failed to process photo. Please try again.',
         variant: 'destructive',
       });
       return null;
