@@ -304,7 +304,7 @@ const ChallengesPage = () => {
           
           <div className="mt-6">
             <p className="text-sm font-medium mb-3">Daily Progress</p>
-            <div className="grid grid-cols-7 gap-2">
+            <div className="grid grid-cols-7 gap-3">
               {last7Days.map((date) => {
                 const isCompleted = userCompletions.includes(date);
                 const hasUserPhoto = userPhotos[date];
@@ -314,7 +314,7 @@ const ChallengesPage = () => {
                 const isToday = date === format(today, 'yyyy-MM-dd');
                 
                 return (
-                  <div key={date} className="flex flex-col items-center gap-1">
+                  <div key={date} className="flex flex-col items-center gap-2 min-w-0">
                     <Toggle
                       pressed={isCompleted}
                       disabled={!isToday || challenge.status !== 'active'}
@@ -326,13 +326,13 @@ const ChallengesPage = () => {
                         }
                       }}
                       className={cn(
-                        "flex flex-col items-center p-2 gap-1 data-[state=on]:bg-habit-success",
+                        "flex flex-col items-center p-2 gap-1 h-12 w-12 data-[state=on]:bg-habit-success",
                         isCompleted ? "bg-habit-success text-white" : "bg-muted",
                         !isToday && "opacity-50"
                       )}
                     >
-                      <CalendarCheck className="h-4 w-4" />
-                      <span className="text-xs">{format(new Date(date), 'd')}</span>
+                      <CalendarCheck className="h-3 w-3" />
+                      <span className="text-xs leading-none">{format(new Date(date), 'd')}</span>
                     </Toggle>
                     
                     {isToday && challenge.status === 'active' && !isCompleted && (
@@ -340,7 +340,7 @@ const ChallengesPage = () => {
                         size="sm"
                         variant="outline"
                         onClick={() => handleTakePhoto(challenge.id)}
-                        className="h-8 w-8 p-0"
+                        className="h-6 w-6 p-0"
                       >
                         <Camera className="h-3 w-3" />
                       </Button>
@@ -351,7 +351,7 @@ const ChallengesPage = () => {
                         size="sm"
                         variant="outline"
                         onClick={() => handleViewPhotos(challenge.id, date)}
-                        className="h-8 w-16 p-1 text-xs"
+                        className="h-6 w-full p-1 text-xs whitespace-nowrap"
                       >
                         View
                       </Button>
@@ -359,9 +359,9 @@ const ChallengesPage = () => {
                     
                     {/* Small photo indicators */}
                     {(hasUserPhoto || hasPartnerPhoto) && (
-                      <div className="flex gap-1">
+                      <div className="flex gap-1 justify-center">
                         {hasUserPhoto && (
-                          <div className="w-4 h-4 rounded border border-habit-success overflow-hidden">
+                          <div className="w-3 h-3 rounded border border-habit-success overflow-hidden">
                             <img
                               src={hasUserPhoto}
                               alt="Your proof"
@@ -370,7 +370,7 @@ const ChallengesPage = () => {
                           </div>
                         )}
                         {hasPartnerPhoto && (
-                          <div className="w-4 h-4 rounded border border-habit-purple overflow-hidden">
+                          <div className="w-3 h-3 rounded border border-habit-purple overflow-hidden">
                             <img
                               src={hasPartnerPhoto}
                               alt="Partner's proof"
