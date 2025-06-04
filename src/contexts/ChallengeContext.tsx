@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   collection,
@@ -33,6 +32,8 @@ export type Challenge = {
   createdAt: string;
   senderDailyCompletions: string[]; // Array of dates when sender marked complete
   receiverDailyCompletions: string[]; // Array of dates when receiver marked complete
+  senderDailyPhotos: Record<string, string>; // Date -> photo URL mapping
+  receiverDailyPhotos: Record<string, string>; // Date -> photo URL mapping
   lastCheckedDate: string; // To track when we last checked streak
 };
 
@@ -62,7 +63,7 @@ type ChallengeContextType = {
   acceptChallenge: (challengeId: string) => Promise<void>;
   declineChallenge: (challengeId: string) => Promise<void>;
   cancelChallenge: (challengeId: string) => Promise<void>;
-  updateProgress: (challengeId: string, progress: number) => Promise<void>;
+  updateProgress: (challengeId: string, progress: number, photoUrl?: string) => Promise<void>;
   getChallengeUsers: (challenge: Challenge) => Promise<{
     sender: UserWithProgress;
     receiver: UserWithProgress;
@@ -129,9 +130,11 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
         const challenge = {
           id: doc.id,
           ...doc.data(),
-          // Ensure arrays are initialized
+          // Ensure arrays and objects are initialized
           senderDailyCompletions: doc.data().senderDailyCompletions || [],
-          receiverDailyCompletions: doc.data().receiverDailyCompletions || []
+          receiverDailyCompletions: doc.data().receiverDailyCompletions || [],
+          senderDailyPhotos: doc.data().senderDailyPhotos || {},
+          receiverDailyPhotos: doc.data().receiverDailyPhotos || {}
         } as Challenge;
         
         console.log('Challenge:', challenge.id, 'Status:', challenge.status, 'SenderId:', challenge.senderId, 'ReceiverId:', challenge.receiverId);
@@ -212,6 +215,8 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString(),
       senderDailyCompletions: [],
       receiverDailyCompletions: [],
+      senderDailyPhotos: {},
+      receiverDailyPhotos: {},
       lastCheckedDate: startDate.toISOString()
     };
     
@@ -279,7 +284,7 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
-  const updateProgress = async (challengeId: string, progress: number) => {
+  const updateProgress = async (challengeId: string, progress: number, photoUrl?: string) => {
     if (!currentUser) throw new Error('User must be logged in');
     
     const challengeRef = doc(db, 'challenges', challengeId);
@@ -294,13 +299,20 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     
     if (challengeData.senderId === currentUser.uid) {
       const updatedCompletions = [...(challengeData.senderDailyCompletions || [])];
+      const updatedPhotos = { ...(challengeData.senderDailyPhotos || {}) };
+      
       if (!updatedCompletions.includes(today)) {
         updatedCompletions.push(today);
+      }
+      
+      if (photoUrl) {
+        updatedPhotos[today] = photoUrl;
       }
       
       await updateDoc(challengeRef, {
         senderProgress: progress,
         senderDailyCompletions: updatedCompletions,
+        senderDailyPhotos: updatedPhotos,
         updatedAt: new Date().toISOString()
       });
       
@@ -309,19 +321,27 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
           c.id === challengeId ? { 
             ...c, 
             senderProgress: progress,
-            senderDailyCompletions: updatedCompletions
+            senderDailyCompletions: updatedCompletions,
+            senderDailyPhotos: updatedPhotos
           } : c
         )
       );
     } else {
       const updatedCompletions = [...(challengeData.receiverDailyCompletions || [])];
+      const updatedPhotos = { ...(challengeData.receiverDailyPhotos || {}) };
+      
       if (!updatedCompletions.includes(today)) {
         updatedCompletions.push(today);
+      }
+      
+      if (photoUrl) {
+        updatedPhotos[today] = photoUrl;
       }
       
       await updateDoc(challengeRef, {
         receiverProgress: progress,
         receiverDailyCompletions: updatedCompletions,
+        receiverDailyPhotos: updatedPhotos,
         updatedAt: new Date().toISOString()
       });
       
@@ -330,7 +350,8 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
           c.id === challengeId ? { 
             ...c, 
             receiverProgress: progress,
-            receiverDailyCompletions: updatedCompletions
+            receiverDailyCompletions: updatedCompletions,
+            receiverDailyPhotos: updatedPhotos
           } : c
         )
       );
@@ -340,7 +361,9 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
       ...challengeData,
       id: challengeId,
       senderDailyCompletions: challengeData.senderDailyCompletions || [],
-      receiverDailyCompletions: challengeData.receiverDailyCompletions || []
+      receiverDailyCompletions: challengeData.receiverDailyCompletions || [],
+      senderDailyPhotos: challengeData.senderDailyPhotos || {},
+      receiverDailyPhotos: challengeData.receiverDailyPhotos || {}
     });
   };
 

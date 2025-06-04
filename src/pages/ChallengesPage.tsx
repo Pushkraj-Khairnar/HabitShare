@@ -14,12 +14,13 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format, addDays, startOfToday, subDays } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { Calendar as CalendarIcon, Trophy, Plus, UserCheck, RefreshCw } from 'lucide-react';
+import { Calendar as CalendarIcon, Trophy, Plus, UserCheck, RefreshCw, Camera } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Toggle } from '@/components/ui/toggle';
 import { useAuth } from '@/contexts/AuthContext';
 import { CalendarCheck } from 'lucide-react';
+import { ChallengePhotoCapture } from '@/components/challenges/ChallengePhotoCapture';
 
 const ChallengesPage = () => {
   const { 
@@ -50,6 +51,9 @@ const ChallengesPage = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   
   const [challengeUsers, setChallengeUsers] = useState<Record<string, { sender: any, receiver: any }>>({});
+  
+  const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
+  const [selectedChallengeId, setSelectedChallengeId] = useState<string>('');
   
   useEffect(() => {
     const loadData = async () => {
@@ -174,12 +178,12 @@ const ChallengesPage = () => {
     }
   };
   
-  const handleUpdateProgress = async (challengeId: string, progress: number) => {
+  const handleUpdateProgress = async (challengeId: string, progress: number, photoUrl?: string) => {
     try {
-      await updateProgress(challengeId, progress);
+      await updateProgress(challengeId, progress, photoUrl);
       toast({
         title: 'Progress updated',
-        description: 'Your challenge progress has been updated',
+        description: photoUrl ? 'Challenge completed with photo proof!' : 'Your challenge progress has been updated',
       });
     } catch (error: any) {
       toast({
@@ -188,6 +192,27 @@ const ChallengesPage = () => {
         variant: 'destructive',
       });
     }
+  };
+  
+  const handleTakePhoto = (challengeId: string) => {
+    setSelectedChallengeId(challengeId);
+    setPhotoDialogOpen(true);
+  };
+  
+  const handlePhotoSubmitted = (photoUrl: string) => {
+    if (selectedChallengeId) {
+      const challenge = activeChallenges.find(c => c.id === selectedChallengeId);
+      if (challenge) {
+        const isSender = challenge.senderId === currentUser?.uid;
+        const userCompletions = isSender 
+          ? challenge.senderDailyCompletions 
+          : challenge.receiverDailyCompletions;
+        
+        const newProgress = ((userCompletions?.length || 0) + 1) * (100 / challenge.duration);
+        handleUpdateProgress(selectedChallengeId, newProgress, photoUrl);
+      }
+    }
+    setSelectedChallengeId('');
   };
   
   const renderChallengeCard = (challenge: Challenge) => {
@@ -202,6 +227,9 @@ const ChallengesPage = () => {
     const userCompletions = isSender 
       ? challenge.senderDailyCompletions 
       : challenge.receiverDailyCompletions;
+    const userPhotos = isSender 
+      ? challenge.senderDailyPhotos 
+      : challenge.receiverDailyPhotos;
     
     return (
       <Card key={challenge.id} className="mb-4">
@@ -258,30 +286,53 @@ const ChallengesPage = () => {
             <div className="flex justify-between gap-2">
               {last7Days.map((date) => {
                 const isCompleted = userCompletions?.includes(date);
+                const hasPhoto = userPhotos?.[date];
                 const isPast = new Date(date) < today;
                 const isToday = date === format(today, 'yyyy-MM-dd');
                 
                 return (
-                  <Toggle
-                    key={date}
-                    pressed={isCompleted}
-                    disabled={!isToday || challenge.status !== 'active'}
-                    onPressedChange={(pressed) => {
-                      if (pressed) {
-                        handleUpdateProgress(challenge.id, 
-                          ((userCompletions?.length || 0) + 1) * (100 / challenge.duration)
-                        );
-                      }
-                    }}
-                    className={cn(
-                      "flex flex-col items-center p-2 gap-1 data-[state=on]:bg-habit-success",
-                      isCompleted ? "bg-habit-success text-white" : "bg-muted",
-                      !isToday && "opacity-50"
+                  <div key={date} className="flex flex-col items-center gap-1">
+                    <Toggle
+                      pressed={isCompleted}
+                      disabled={!isToday || challenge.status !== 'active'}
+                      onPressedChange={(pressed) => {
+                        if (pressed) {
+                          handleUpdateProgress(challenge.id, 
+                            ((userCompletions?.length || 0) + 1) * (100 / challenge.duration)
+                          );
+                        }
+                      }}
+                      className={cn(
+                        "flex flex-col items-center p-2 gap-1 data-[state=on]:bg-habit-success",
+                        isCompleted ? "bg-habit-success text-white" : "bg-muted",
+                        !isToday && "opacity-50"
+                      )}
+                    >
+                      <CalendarCheck className="h-4 w-4" />
+                      <span className="text-xs">{format(new Date(date), 'd')}</span>
+                    </Toggle>
+                    
+                    {isToday && challenge.status === 'active' && !isCompleted && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleTakePhoto(challenge.id)}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Camera className="h-3 w-3" />
+                      </Button>
                     )}
-                  >
-                    <CalendarCheck className="h-4 w-4" />
-                    <span className="text-xs">{format(new Date(date), 'd')}</span>
-                  </Toggle>
+                    
+                    {hasPhoto && (
+                      <div className="w-8 h-8 rounded border-2 border-habit-success overflow-hidden">
+                        <img
+                          src={hasPhoto}
+                          alt="Proof"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -579,6 +630,14 @@ const ChallengesPage = () => {
           </TabsContent>
         </Tabs>
       )}
+      
+      <ChallengePhotoCapture
+        isOpen={photoDialogOpen}
+        onClose={() => setPhotoDialogOpen(false)}
+        onPhotoSubmitted={handlePhotoSubmitted}
+        challengeId={selectedChallengeId}
+        userId={currentUser?.uid || ''}
+      />
     </div>
   );
 };
