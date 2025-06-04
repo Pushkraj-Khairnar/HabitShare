@@ -32,52 +32,78 @@ export function useCamera() {
 
   const uploadPhoto = async (photoUri: string, challengeId: string, userId: string): Promise<string | null> => {
     try {
+      console.log('Starting photo upload for URI:', photoUri);
+      
       // Convert URI to blob
       const response = await fetch(photoUri);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status}`);
+      }
+      
       const blob = await response.blob();
+      console.log('Blob created, size:', blob.size, 'type:', blob.type);
       
       // Convert blob to base64
-      const base64 = await new Promise<string>((resolve) => {
+      const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => {
           const result = reader.result as string;
+          if (!result) {
+            reject(new Error('Failed to convert to base64'));
+            return;
+          }
           // Remove data:image/jpeg;base64, prefix
           const base64Data = result.split(',')[1];
           resolve(base64Data);
         };
+        reader.onerror = () => reject(new Error('FileReader error'));
         reader.readAsDataURL(blob);
       });
 
-      // Upload to Imgur
-      const formData = new FormData();
-      formData.append('image', base64);
-      formData.append('type', 'base64');
-      formData.append('title', `Challenge ${challengeId} - ${userId}`);
+      console.log('Base64 conversion complete, length:', base64.length);
 
+      // Upload to Imgur using updated API approach
+      const uploadData = {
+        image: base64,
+        type: 'base64',
+        title: `Challenge ${challengeId} - ${userId}`,
+        description: 'Challenge completion proof'
+      };
+
+      console.log('Sending request to Imgur API...');
+      
       const imgurResponse = await fetch('https://api.imgur.com/3/image', {
         method: 'POST',
         headers: {
-          'Authorization': 'Client-ID 546c25a59c58ad7', // Public Imgur client ID
+          'Authorization': 'Client-ID 546c25a59c58ad7',
+          'Content-Type': 'application/json',
         },
-        body: formData,
+        body: JSON.stringify(uploadData),
       });
 
+      console.log('Imgur response status:', imgurResponse.status);
+      
       if (!imgurResponse.ok) {
-        throw new Error('Failed to upload to Imgur');
+        const errorText = await imgurResponse.text();
+        console.error('Imgur API error:', errorText);
+        throw new Error(`Imgur upload failed: ${imgurResponse.status} - ${errorText}`);
       }
 
       const imgurData = await imgurResponse.json();
+      console.log('Imgur response:', imgurData);
       
       if (!imgurData.success) {
-        throw new Error('Imgur upload failed');
+        console.error('Imgur upload unsuccessful:', imgurData);
+        throw new Error(`Imgur upload failed: ${imgurData.data?.error || 'Unknown error'}`);
       }
 
+      console.log('Upload successful, image URL:', imgurData.data.link);
       return imgurData.data.link;
     } catch (error) {
       console.error('Error uploading photo:', error);
       toast({
         title: 'Upload Error',
-        description: 'Failed to upload photo. Please try again.',
+        description: error instanceof Error ? error.message : 'Failed to upload photo. Please try again.',
         variant: 'destructive',
       });
       return null;
