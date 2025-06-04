@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { format } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
 
 interface ChallengePhotoViewerProps {
   isOpen: boolean;
@@ -22,7 +22,24 @@ export function ChallengePhotoViewer({
   userName,
   partnerName
 }: ChallengePhotoViewerProps) {
-  const formattedDate = format(new Date(date), 'MMMM d, yyyy');
+  // Safely parse and validate the date
+  const parseDate = (dateString: string) => {
+    if (!dateString) return null;
+    
+    // Try parsing as ISO date first (YYYY-MM-DD format)
+    let parsedDate = parseISO(dateString);
+    
+    // If that fails, try regular Date constructor
+    if (!isValid(parsedDate)) {
+      parsedDate = new Date(dateString);
+    }
+    
+    // Return valid date or null
+    return isValid(parsedDate) ? parsedDate : null;
+  };
+  
+  const validDate = parseDate(date);
+  const formattedDate = validDate ? format(validDate, 'MMMM d, yyyy') : 'Invalid Date';
   
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
