@@ -4,7 +4,7 @@ import { useHabits, Habit, HabitLog } from '@/contexts/HabitContext';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Check, X, Trash } from 'lucide-react';
-import { format, subDays, isSameDay, parseISO, startOfWeek, endOfWeek, subWeeks } from 'date-fns';
+import { format, subDays, isSameDay, parseISO, startOfWeek, endOfWeek, subWeeks, isAfter, startOfDay } from 'date-fns';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -29,6 +29,11 @@ const HabitCard = ({ habit }: HabitCardProps) => {
   const { toast } = useToast();
 
   const recentLogs = habitLogs[habit.id] || [];
+  
+  // Check if habit has started
+  const habitStartDate = startOfDay(new Date(habit.startDate));
+  const today = startOfDay(new Date());
+  const hasHabitStarted = !isAfter(habitStartDate, today);
   
   // Generate progress data based on habit frequency
   const progressData = habit.frequency === 'weekly' 
@@ -100,6 +105,15 @@ const HabitCard = ({ habit }: HabitCardProps) => {
   };
 
   const handleMarkStatus = async (date: string, status: 'completed' | 'missed') => {
+    if (!hasHabitStarted) {
+      toast({
+        title: 'Habit not started',
+        description: `This habit starts on ${format(habitStartDate, 'MMM d, yyyy')}. You cannot mark it as ${status} yet.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       await logHabitCompletion(habit.id, date, status);
       toast({
@@ -134,6 +148,9 @@ const HabitCard = ({ habit }: HabitCardProps) => {
           </div>
           <div className="text-sm text-muted-foreground">
             {habit.frequency === 'daily' ? 'Daily' : 'Weekly'} • Started {format(new Date(habit.startDate), 'MMM d')}
+            {!hasHabitStarted && (
+              <span className="text-orange-600 ml-2">• Starts {format(habitStartDate, 'MMM d')}</span>
+            )}
           </div>
         </CardHeader>
         <CardContent className="pt-0">
@@ -183,12 +200,14 @@ const HabitCard = ({ habit }: HabitCardProps) => {
               variant="outline" 
               className="flex-1 border-red-200 hover:border-red-300 hover:bg-red-50"
               onClick={() => handleMarkStatus(format(new Date(), 'yyyy-MM-dd'), 'missed')}
+              disabled={!hasHabitStarted}
             >
               <X className="h-4 w-4 mr-1 text-destructive" /> Miss
             </Button>
             <Button 
               className="flex-1 bg-habit-success hover:bg-habit-success/90"
               onClick={() => handleMarkStatus(format(new Date(), 'yyyy-MM-dd'), 'completed')}
+              disabled={!hasHabitStarted}
             >
               <Check className="h-4 w-4 mr-1" /> Complete
             </Button>

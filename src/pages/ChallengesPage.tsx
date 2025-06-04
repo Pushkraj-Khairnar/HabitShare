@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useChallenges, Challenge } from '@/contexts/ChallengeContext';
 import { useFriends } from '@/contexts/FriendContext';
@@ -13,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { format, addDays, startOfToday, subDays, startOfWeek, endOfWeek, addWeeks, subWeeks } from 'date-fns';
+import { format, addDays, startOfToday, subDays, startOfWeek, endOfWeek, addWeeks, subWeeks, isAfter, startOfDay } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Calendar as CalendarIcon, Trophy, Plus, UserCheck, RefreshCw, Camera } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -238,6 +237,10 @@ const ChallengesPage = () => {
     const users = challengeUsers[challenge.id];
     const today = startOfToday();
     
+    // Check if challenge has started
+    const challengeStartDate = startOfDay(new Date(challenge.startDate));
+    const hasChallengeStarted = !isAfter(challengeStartDate, today);
+    
     // For weekly challenges, show 4 weeks instead of 4 days
     // For daily challenges, show 4 days as before
     const timeRanges = challenge.frequency === 'weekly' 
@@ -283,6 +286,9 @@ const ChallengesPage = () => {
             {challenge.frequency === 'daily' ? 'Daily' : 'Weekly'} • 
             {challenge.duration} days • 
             Starts {format(new Date(challenge.startDate), 'MMM d')}
+            {!hasChallengeStarted && (
+              <span className="text-orange-600"> • Starts {format(challengeStartDate, 'MMM d')}</span>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -341,12 +347,18 @@ const ChallengesPage = () => {
                   <div key={timeRange.id} className="flex flex-col items-center gap-2">
                     <Toggle
                       pressed={isCompleted}
-                      disabled={!isCurrent || challenge.status !== 'active'}
+                      disabled={!isCurrent || challenge.status !== 'active' || !hasChallengeStarted}
                       onPressedChange={(pressed) => {
-                        if (pressed) {
+                        if (pressed && hasChallengeStarted) {
                           handleUpdateProgress(challenge.id, 
                             (userCompletions.length + 1) * (100 / challenge.duration)
                           );
+                        } else if (!hasChallengeStarted) {
+                          toast({
+                            title: 'Challenge not started',
+                            description: `This challenge starts on ${format(challengeStartDate, 'MMM d, yyyy')}. You cannot mark it as complete yet.`,
+                            variant: 'destructive',
+                          });
                         }
                       }}
                       className={cn(
@@ -366,7 +378,7 @@ const ChallengesPage = () => {
                     </Toggle>
                     
                     <div className="flex flex-col gap-1 w-full items-center">
-                      {isCurrent && challenge.status === 'active' && !isCompleted && (
+                      {isCurrent && challenge.status === 'active' && !isCompleted && hasChallengeStarted && (
                         <Button
                           size="sm"
                           variant="outline"
