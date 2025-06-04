@@ -1,9 +1,10 @@
+
 import { useState } from 'react';
 import { useHabits, Habit, HabitLog } from '@/contexts/HabitContext';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Check, X, Trash } from 'lucide-react';
-import { format, subDays, isSameDay, parseISO } from 'date-fns';
+import { format, subDays, isSameDay, parseISO, startOfWeek, endOfWeek, subWeeks } from 'date-fns';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -29,21 +30,55 @@ const HabitCard = ({ habit }: HabitCardProps) => {
 
   const recentLogs = habitLogs[habit.id] || [];
   
-  const last7Days = Array.from({ length: 7 }, (_, i) => {
-    const date = subDays(new Date(), 6 - i);
-    const dateStr = format(date, 'yyyy-MM-dd');
-    
-    const log = recentLogs.find(log => {
-      const logDate = parseISO(log.date);
-      return isSameDay(logDate, date);
-    });
-    
-    return {
-      date,
-      dateStr,
-      status: log?.status || 'pending'
-    };
-  });
+  // Generate progress data based on habit frequency
+  const progressData = habit.frequency === 'weekly' 
+    ? Array.from({ length: 7 }, (_, i) => {
+        const weekStart = startOfWeek(subWeeks(new Date(), 6 - i), { weekStartsOn: 0 });
+        const weekEnd = endOfWeek(weekStart, { weekStartsOn: 0 });
+        const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+        const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
+        
+        // Check if there's any completed log within this week
+        const hasCompleted = recentLogs.some(log => {
+          const logDate = parseISO(log.date);
+          return log.status === 'completed' && 
+                 logDate >= weekStart && 
+                 logDate <= weekEnd;
+        });
+        
+        // Check if there's any missed log within this week (and no completed)
+        const hasMissed = !hasCompleted && recentLogs.some(log => {
+          const logDate = parseISO(log.date);
+          return log.status === 'missed' && 
+                 logDate >= weekStart && 
+                 logDate <= weekEnd;
+        });
+        
+        return {
+          date: weekStart,
+          dateStr: weekStartStr,
+          status: hasCompleted ? 'completed' : hasMissed ? 'missed' : 'pending',
+          isCurrentWeek: weekStart <= new Date() && new Date() <= weekEnd,
+          weekRange: `${format(weekStart, 'MMM d')} - ${format(weekEnd, 'MMM d')}`
+        };
+      })
+    : Array.from({ length: 7 }, (_, i) => {
+        const date = subDays(new Date(), 6 - i);
+        const dateStr = format(date, 'yyyy-MM-dd');
+        
+        const log = recentLogs.find(log => {
+          const logDate = parseISO(log.date);
+          return isSameDay(logDate, date);
+        });
+        
+        return {
+          date,
+          dateStr,
+          status: log?.status || 'pending',
+          isCurrentWeek: false,
+          weekRange: ''
+        };
+      });
 
   const handleDelete = async () => {
     try {
@@ -108,14 +143,19 @@ const HabitCard = ({ habit }: HabitCardProps) => {
           <div className="mt-4">
             <p className="text-sm font-medium mb-2">Current Streak: {habit.currentStreak} {habit.frequency === 'daily' ? 'days' : 'weeks'}</p>
             <div className="flex justify-between mt-2">
-              {last7Days.map((day, index) => (
+              {progressData.map((item, index) => (
                 <div key={index} className="flex flex-col items-center">
-                  <div className="text-xs mb-1">{format(day.date, 'd')}</div>
+                  <div className="text-xs mb-1">
+                    {habit.frequency === 'weekly' 
+                      ? format(item.date, 'd') 
+                      : format(item.date, 'd')
+                    }
+                  </div>
                   <div 
                     className={cn(
                       "streak-dot",
-                      day.status === 'completed' ? 'streak-dot-completed' : 
-                      day.status === 'missed' ? 'streak-dot-missed' : 'streak-dot-pending'
+                      item.status === 'completed' ? 'streak-dot-completed' : 
+                      item.status === 'missed' ? 'streak-dot-missed' : 'streak-dot-pending'
                     )}
                   ></div>
                 </div>
