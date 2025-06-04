@@ -73,8 +73,12 @@ const ChallengesPage = () => {
       const usersData: Record<string, { sender: any, receiver: any }> = {};
       
       for (const challenge of activeChallenges) {
-        const users = await getChallengeUsers(challenge);
-        usersData[challenge.id] = users;
+        try {
+          const users = await getChallengeUsers(challenge);
+          usersData[challenge.id] = users;
+        } catch (error) {
+          console.error('Error fetching users for challenge:', challenge.id, error);
+        }
       }
       
       setChallengeUsers(usersData);
@@ -210,10 +214,10 @@ const ChallengesPage = () => {
       if (challenge) {
         const isSender = challenge.senderId === currentUser?.uid;
         const userCompletions = isSender 
-          ? challenge.senderDailyCompletions 
-          : challenge.receiverDailyCompletions;
+          ? challenge.senderDailyCompletions || []
+          : challenge.receiverDailyCompletions || [];
         
-        const newProgress = ((userCompletions?.length || 0) + 1) * (100 / challenge.duration);
+        const newProgress = ((userCompletions.length + 1) * (100 / challenge.duration));
         handleUpdateProgress(selectedChallengeId, newProgress, photoUrl);
       }
     }
@@ -239,14 +243,14 @@ const ChallengesPage = () => {
     
     const isSender = users?.sender.id === currentUser?.uid;
     const userCompletions = isSender 
-      ? challenge.senderDailyCompletions 
-      : challenge.receiverDailyCompletions;
+      ? challenge.senderDailyCompletions || []
+      : challenge.receiverDailyCompletions || [];
     const userPhotos = isSender 
-      ? challenge.senderDailyPhotos 
-      : challenge.receiverDailyPhotos;
+      ? challenge.senderDailyPhotos || {}
+      : challenge.receiverDailyPhotos || {};
     const partnerPhotos = isSender 
-      ? challenge.receiverDailyPhotos 
-      : challenge.senderDailyPhotos;
+      ? challenge.receiverDailyPhotos || {}
+      : challenge.senderDailyPhotos || {};
     
     return (
       <Card key={challenge.id} className="mb-4">
@@ -269,30 +273,30 @@ const ChallengesPage = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="w-8 h-8 rounded-full bg-habit-purple flex items-center justify-center text-white mr-2">
-                    {users.sender.username.charAt(0)}
+                    {users.sender.username?.charAt(0) || 'U'}
                   </div>
                   <div>
-                    <p className="text-sm font-medium">{users.sender.username}</p>
-                    <p className="text-xs text-muted-foreground">{users.sender.progress}% complete</p>
+                    <p className="text-sm font-medium">{users.sender.username || 'User'}</p>
+                    <p className="text-xs text-muted-foreground">{users.sender.progress || 0}% complete</p>
                   </div>
                 </div>
                 <div className="w-20 bg-gray-200 rounded-full h-2.5">
-                  <div className="bg-habit-purple h-2.5 rounded-full" style={{ width: `${users.sender.progress}%` }}></div>
+                  <div className="bg-habit-purple h-2.5 rounded-full" style={{ width: `${users.sender.progress || 0}%` }}></div>
                 </div>
               </div>
               
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="w-8 h-8 rounded-full bg-habit-success flex items-center justify-center text-white mr-2">
-                    {users.receiver.username.charAt(0)}
+                    {users.receiver.username?.charAt(0) || 'U'}
                   </div>
                   <div>
-                    <p className="text-sm font-medium">{users.receiver.username}</p>
-                    <p className="text-xs text-muted-foreground">{users.receiver.progress}% complete</p>
+                    <p className="text-sm font-medium">{users.receiver.username || 'User'}</p>
+                    <p className="text-xs text-muted-foreground">{users.receiver.progress || 0}% complete</p>
                   </div>
                 </div>
                 <div className="w-20 bg-gray-200 rounded-full h-2.5">
-                  <div className="bg-habit-success h-2.5 rounded-full" style={{ width: `${users.receiver.progress}%` }}></div>
+                  <div className="bg-habit-success h-2.5 rounded-full" style={{ width: `${users.receiver.progress || 0}%` }}></div>
                 </div>
               </div>
             </div>
@@ -300,11 +304,11 @@ const ChallengesPage = () => {
           
           <div className="mt-6">
             <p className="text-sm font-medium mb-3">Daily Progress</p>
-            <div className="flex justify-between gap-2">
+            <div className="grid grid-cols-7 gap-2">
               {last7Days.map((date) => {
-                const isCompleted = userCompletions?.includes(date);
-                const hasUserPhoto = userPhotos?.[date];
-                const hasPartnerPhoto = partnerPhotos?.[date];
+                const isCompleted = userCompletions.includes(date);
+                const hasUserPhoto = userPhotos[date];
+                const hasPartnerPhoto = partnerPhotos[date];
                 const hasAnyPhoto = hasUserPhoto || hasPartnerPhoto;
                 const isPast = new Date(date) < today;
                 const isToday = date === format(today, 'yyyy-MM-dd');
@@ -317,7 +321,7 @@ const ChallengesPage = () => {
                       onPressedChange={(pressed) => {
                         if (pressed) {
                           handleUpdateProgress(challenge.id, 
-                            ((userCompletions?.length || 0) + 1) * (100 / challenge.duration)
+                            (userCompletions.length + 1) * (100 / challenge.duration)
                           );
                         }
                       }}
@@ -349,7 +353,7 @@ const ChallengesPage = () => {
                         onClick={() => handleViewPhotos(challenge.id, date)}
                         className="h-8 w-16 p-1 text-xs"
                       >
-                        View Photos
+                        View
                       </Button>
                     )}
                     
@@ -416,6 +420,38 @@ const ChallengesPage = () => {
       )}
     </Card>
   );
+
+  // Get safe user names for photo viewer
+  const getUserNames = () => {
+    if (!selectedPhotoChallenge || !challengeUsers[selectedPhotoChallenge.id]) {
+      return { userName: 'You', partnerName: 'Partner' };
+    }
+    
+    const users = challengeUsers[selectedPhotoChallenge.id];
+    const isSender = users.sender.id === currentUser?.uid;
+    
+    return {
+      userName: isSender ? (users.sender.username || 'You') : (users.receiver.username || 'You'),
+      partnerName: isSender ? (users.receiver.username || 'Partner') : (users.sender.username || 'Partner')
+    };
+  };
+
+  const getPhotoUrls = () => {
+    if (!selectedPhotoChallenge || !selectedPhotoDate) {
+      return { userPhoto: undefined, partnerPhoto: undefined };
+    }
+    
+    const isSender = challengeUsers[selectedPhotoChallenge.id]?.sender.id === currentUser?.uid;
+    
+    return {
+      userPhoto: isSender 
+        ? selectedPhotoChallenge.senderDailyPhotos?.[selectedPhotoDate]
+        : selectedPhotoChallenge.receiverDailyPhotos?.[selectedPhotoDate],
+      partnerPhoto: isSender 
+        ? selectedPhotoChallenge.receiverDailyPhotos?.[selectedPhotoDate]
+        : selectedPhotoChallenge.senderDailyPhotos?.[selectedPhotoDate]
+    };
+  };
 
   return (
     <div className="space-y-6 pb-16">
@@ -687,26 +723,8 @@ const ChallengesPage = () => {
         isOpen={photoViewerOpen}
         onClose={() => setPhotoViewerOpen(false)}
         date={selectedPhotoDate}
-        userPhoto={selectedPhotoChallenge && challengeUsers[selectedPhotoChallenge.id] ? 
-          (challengeUsers[selectedPhotoChallenge.id].sender.id === currentUser?.uid 
-            ? selectedPhotoChallenge.senderDailyPhotos?.[selectedPhotoDate]
-            : selectedPhotoChallenge.receiverDailyPhotos?.[selectedPhotoDate]
-          ) : undefined
-        }
-        partnerPhoto={selectedPhotoChallenge && challengeUsers[selectedPhotoChallenge.id] ? 
-          (challengeUsers[selectedPhotoChallenge.id].sender.id === currentUser?.uid 
-            ? selectedPhotoChallenge.receiverDailyPhotos?.[selectedPhotoDate]
-            : selectedPhotoChallenge.senderDailyPhotos?.[selectedPhotoDate]
-          ) : undefined
-        }
-        userName={challengeUsers[selectedPhotoChallenge?.id || '']?.sender.id === currentUser?.uid 
-          ? challengeUsers[selectedPhotoChallenge?.id || '']?.sender.username || 'You'
-          : challengeUsers[selectedPhotoChallenge?.id || '']?.receiver.username || 'You'
-        }
-        partnerName={challengeUsers[selectedPhotoChallenge?.id || '']?.sender.id === currentUser?.uid 
-          ? challengeUsers[selectedPhotoChallenge?.id || '']?.receiver.username || 'Partner'
-          : challengeUsers[selectedPhotoChallenge?.id || '']?.sender.username || 'Partner'
-        }
+        {...getPhotoUrls()}
+        {...getUserNames()}
       />
     </div>
   );
