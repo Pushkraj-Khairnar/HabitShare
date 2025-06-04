@@ -43,32 +43,12 @@ export function useCamera() {
       const blob = await response.blob();
       console.log('Blob created, size:', blob.size, 'type:', blob.type);
       
-      // Convert blob to base64
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const result = reader.result as string;
-          if (!result) {
-            reject(new Error('Failed to convert to base64'));
-            return;
-          }
-          // Remove data:image/jpeg;base64, prefix
-          const base64Data = result.split(',')[1];
-          resolve(base64Data);
-        };
-        reader.onerror = () => reject(new Error('FileReader error'));
-        reader.readAsDataURL(blob);
-      });
-
-      console.log('Base64 conversion complete, length:', base64.length);
-
-      // Upload to Imgur using updated API approach
-      const uploadData = {
-        image: base64,
-        type: 'base64',
-        title: `Challenge ${challengeId} - ${userId}`,
-        description: 'Challenge completion proof'
-      };
+      // Create FormData for Imgur API
+      const formData = new FormData();
+      formData.append('image', blob);
+      formData.append('type', 'file');
+      formData.append('title', `Challenge ${challengeId} - ${userId}`);
+      formData.append('description', 'Challenge completion proof');
 
       console.log('Sending request to Imgur API...');
       
@@ -76,9 +56,8 @@ export function useCamera() {
         method: 'POST',
         headers: {
           'Authorization': 'Client-ID 546c25a59c58ad7',
-          'Content-Type': 'application/json',
         },
-        body: JSON.stringify(uploadData),
+        body: formData,
       });
 
       console.log('Imgur response status:', imgurResponse.status);
