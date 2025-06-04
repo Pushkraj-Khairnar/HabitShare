@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useChallenges, Challenge } from '@/contexts/ChallengeContext';
 import { useFriends } from '@/contexts/FriendContext';
@@ -304,7 +305,7 @@ const ChallengesPage = () => {
           
           <div className="mt-6">
             <p className="text-sm font-medium mb-3">Daily Progress</p>
-            <div className="grid grid-cols-7 gap-3">
+            <div className="flex gap-1 overflow-x-auto pb-2">
               {last7Days.map((date) => {
                 const isCompleted = userCompletions.includes(date);
                 const hasUserPhoto = userPhotos[date];
@@ -314,7 +315,7 @@ const ChallengesPage = () => {
                 const isToday = date === format(today, 'yyyy-MM-dd');
                 
                 return (
-                  <div key={date} className="flex flex-col items-center gap-2 min-w-0">
+                  <div key={date} className="flex flex-col items-center gap-2 min-w-[60px] flex-shrink-0">
                     <Toggle
                       pressed={isCompleted}
                       disabled={!isToday || challenge.status !== 'active'}
@@ -326,7 +327,7 @@ const ChallengesPage = () => {
                         }
                       }}
                       className={cn(
-                        "flex flex-col items-center p-2 gap-1 h-12 w-12 data-[state=on]:bg-habit-success",
+                        "flex flex-col items-center p-1 gap-1 h-10 w-10 data-[state=on]:bg-habit-success text-xs",
                         isCompleted ? "bg-habit-success text-white" : "bg-muted",
                         !isToday && "opacity-50"
                       )}
@@ -335,33 +336,35 @@ const ChallengesPage = () => {
                       <span className="text-xs leading-none">{format(new Date(date), 'd')}</span>
                     </Toggle>
                     
-                    {isToday && challenge.status === 'active' && !isCompleted && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleTakePhoto(challenge.id)}
-                        className="h-6 w-6 p-0"
-                      >
-                        <Camera className="h-3 w-3" />
-                      </Button>
-                    )}
-                    
-                    {hasAnyPhoto && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleViewPhotos(challenge.id, date)}
-                        className="h-6 w-full p-1 text-xs whitespace-nowrap"
-                      >
-                        View
-                      </Button>
-                    )}
+                    <div className="flex flex-col gap-1 w-full items-center">
+                      {isToday && challenge.status === 'active' && !isCompleted && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleTakePhoto(challenge.id)}
+                          className="h-5 w-8 p-0 text-xs"
+                        >
+                          <Camera className="h-2 w-2" />
+                        </Button>
+                      )}
+                      
+                      {hasAnyPhoto && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleViewPhotos(challenge.id, date)}
+                          className="h-5 w-full p-0 text-[10px] leading-tight"
+                        >
+                          View
+                        </Button>
+                      )}
+                    </div>
                     
                     {/* Small photo indicators */}
                     {(hasUserPhoto || hasPartnerPhoto) && (
-                      <div className="flex gap-1 justify-center">
+                      <div className="flex gap-0.5 justify-center">
                         {hasUserPhoto && (
-                          <div className="w-3 h-3 rounded border border-habit-success overflow-hidden">
+                          <div className="w-2 h-2 rounded border border-habit-success overflow-hidden">
                             <img
                               src={hasUserPhoto}
                               alt="Your proof"
@@ -370,7 +373,7 @@ const ChallengesPage = () => {
                           </div>
                         )}
                         {hasPartnerPhoto && (
-                          <div className="w-3 h-3 rounded border border-habit-purple overflow-hidden">
+                          <div className="w-2 h-2 rounded border border-habit-purple overflow-hidden">
                             <img
                               src={hasPartnerPhoto}
                               alt="Partner's proof"
