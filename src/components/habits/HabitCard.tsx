@@ -32,11 +32,10 @@ const HabitCard = ({ habit }: HabitCardProps) => {
   
   // Generate progress data based on habit frequency
   const progressData = habit.frequency === 'weekly' 
-    ? Array.from({ length: 7 }, (_, i) => {
-        const weekStart = startOfWeek(subWeeks(new Date(), 6 - i), { weekStartsOn: 0 });
+    ? Array.from({ length: 4 }, (_, i) => {
+        const weekStart = startOfWeek(subWeeks(new Date(), 3 - i), { weekStartsOn: 0 });
         const weekEnd = endOfWeek(weekStart, { weekStartsOn: 0 });
         const weekStartStr = format(weekStart, 'yyyy-MM-dd');
-        const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
         
         // Check if there's any completed log within this week
         const hasCompleted = recentLogs.some(log => {
@@ -62,8 +61,8 @@ const HabitCard = ({ habit }: HabitCardProps) => {
           weekRange: `${format(weekStart, 'MMM d')} - ${format(weekEnd, 'MMM d')}`
         };
       })
-    : Array.from({ length: 7 }, (_, i) => {
-        const date = subDays(new Date(), 6 - i);
+    : Array.from({ length: 4 }, (_, i) => {
+        const date = subDays(new Date(), 3 - i);
         const dateStr = format(date, 'yyyy-MM-dd');
         
         const log = recentLogs.find(log => {
@@ -142,24 +141,39 @@ const HabitCard = ({ habit }: HabitCardProps) => {
           
           <div className="mt-4">
             <p className="text-sm font-medium mb-2">Current Streak: {habit.currentStreak} {habit.frequency === 'daily' ? 'days' : 'weeks'}</p>
-            <div className="flex justify-between mt-2">
-              {progressData.map((item, index) => (
-                <div key={index} className="flex flex-col items-center">
-                  <div className="text-xs mb-1">
-                    {habit.frequency === 'weekly' 
-                      ? format(item.date, 'd') 
-                      : format(item.date, 'd')
-                    }
+            <div className="mt-6">
+              <p className="text-sm font-medium mb-3">
+                {habit.frequency === 'weekly' ? 'Weekly Progress' : 'Daily Progress'}
+              </p>
+              <div className="flex gap-3 justify-center">
+                {progressData.map((item, index) => (
+                  <div key={index} className="flex flex-col items-center gap-2">
+                    <div 
+                      className={cn(
+                        "flex flex-col items-center p-1 gap-1 text-xs",
+                        habit.frequency === 'weekly' ? "h-16 w-16" : "h-12 w-12",
+                        item.status === 'completed' ? "bg-habit-success text-white" : 
+                        item.status === 'missed' ? "bg-red-100 text-red-600" : "bg-muted",
+                        "rounded border"
+                      )}
+                    >
+                      <div className="text-xs leading-none text-center">
+                        {habit.frequency === 'weekly' 
+                          ? item.weekRange
+                          : format(item.date, 'd')
+                        }
+                      </div>
+                      <div 
+                        className={cn(
+                          "w-2 h-2 rounded-full",
+                          item.status === 'completed' ? 'bg-white' : 
+                          item.status === 'missed' ? 'bg-red-600' : 'bg-gray-400'
+                        )}
+                      ></div>
+                    </div>
                   </div>
-                  <div 
-                    className={cn(
-                      "streak-dot",
-                      item.status === 'completed' ? 'streak-dot-completed' : 
-                      item.status === 'missed' ? 'streak-dot-missed' : 'streak-dot-pending'
-                    )}
-                  ></div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         </CardContent>
