@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { format, addDays, startOfToday, subDays } from 'date-fns';
+import { format, addDays, startOfToday, subDays, startOfWeek, endOfWeek, addWeeks, subWeeks } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Calendar as CalendarIcon, Trophy, Plus, UserCheck, RefreshCw, Camera } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -238,10 +238,28 @@ const ChallengesPage = () => {
     const users = challengeUsers[challenge.id];
     const today = startOfToday();
     
-    // Show only 4 days: today and previous 3 days
-    const last4Days = Array.from({ length: 4 }, (_, i) => {
-      return format(subDays(today, 3 - i), 'yyyy-MM-dd');
-    });
+    // For weekly challenges, show 4 weeks instead of 4 days
+    // For daily challenges, show 4 days as before
+    const timeRanges = challenge.frequency === 'weekly' 
+      ? Array.from({ length: 4 }, (_, i) => {
+          const weekStart = startOfWeek(subWeeks(today, 3 - i), { weekStartsOn: 0 }); // Sunday
+          const weekEnd = endOfWeek(weekStart, { weekStartsOn: 0 }); // Saturday
+          return {
+            id: format(weekStart, 'yyyy-MM-dd'),
+            label: `${format(weekStart, 'MMM d')} - ${format(weekEnd, 'MMM d')}`,
+            date: weekStart,
+            isCurrentPeriod: weekStart <= today && today <= weekEnd
+          };
+        })
+      : Array.from({ length: 4 }, (_, i) => {
+          const date = subDays(today, 3 - i);
+          return {
+            id: format(date, 'yyyy-MM-dd'),
+            label: format(date, 'd'),
+            date,
+            isCurrentPeriod: format(date, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')
+          };
+        });
     
     const isSender = users?.sender.id === currentUser?.uid;
     const userCompletions = isSender 
@@ -305,21 +323,25 @@ const ChallengesPage = () => {
           )}
           
           <div className="mt-6">
-            <p className="text-sm font-medium mb-3">Daily Progress</p>
+            <p className="text-sm font-medium mb-3">
+              {challenge.frequency === 'weekly' ? 'Weekly Progress' : 'Daily Progress'}
+            </p>
             <div className="flex gap-3 justify-center">
-              {last4Days.map((date) => {
-                const isCompleted = userCompletions.includes(date);
-                const hasUserPhoto = userPhotos[date];
-                const hasPartnerPhoto = partnerPhotos[date];
+              {timeRanges.map((timeRange) => {
+                const isCompleted = challenge.frequency === 'weekly'
+                  ? userCompletions.includes(timeRange.id)
+                  : userCompletions.includes(timeRange.id);
+                const hasUserPhoto = userPhotos[timeRange.id];
+                const hasPartnerPhoto = partnerPhotos[timeRange.id];
                 const hasAnyPhoto = hasUserPhoto || hasPartnerPhoto;
-                const isPast = new Date(date) < today;
-                const isToday = date === format(today, 'yyyy-MM-dd');
+                const isPast = timeRange.date < today;
+                const isCurrent = timeRange.isCurrentPeriod;
                 
                 return (
-                  <div key={date} className="flex flex-col items-center gap-2">
+                  <div key={timeRange.id} className="flex flex-col items-center gap-2">
                     <Toggle
                       pressed={isCompleted}
-                      disabled={!isToday || challenge.status !== 'active'}
+                      disabled={!isCurrent || challenge.status !== 'active'}
                       onPressedChange={(pressed) => {
                         if (pressed) {
                           handleUpdateProgress(challenge.id, 
@@ -328,17 +350,23 @@ const ChallengesPage = () => {
                         }
                       }}
                       className={cn(
-                        "flex flex-col items-center p-1 gap-1 h-12 w-12 data-[state=on]:bg-habit-success text-xs",
+                        "flex flex-col items-center p-1 gap-1 data-[state=on]:bg-habit-success text-xs",
+                        challenge.frequency === 'weekly' ? "h-16 w-16" : "h-12 w-12",
                         isCompleted ? "bg-habit-success text-white" : "bg-muted",
-                        !isToday && "opacity-50"
+                        !isCurrent && "opacity-50"
                       )}
                     >
                       <CalendarCheck className="h-4 w-4" />
-                      <span className="text-xs leading-none">{format(new Date(date), 'd')}</span>
+                      <span className={cn(
+                        "text-xs leading-none text-center",
+                        challenge.frequency === 'weekly' ? "max-w-14" : ""
+                      )}>
+                        {timeRange.label}
+                      </span>
                     </Toggle>
                     
                     <div className="flex flex-col gap-1 w-full items-center">
-                      {isToday && challenge.status === 'active' && !isCompleted && (
+                      {isCurrent && challenge.status === 'active' && !isCompleted && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -353,7 +381,7 @@ const ChallengesPage = () => {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleViewPhotos(challenge.id, date)}
+                          onClick={() => handleViewPhotos(challenge.id, timeRange.id)}
                           className="h-6 w-full p-0 text-xs"
                         >
                           View
