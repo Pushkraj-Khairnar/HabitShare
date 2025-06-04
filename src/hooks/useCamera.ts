@@ -43,41 +43,55 @@ export function useCamera() {
       const blob = await response.blob();
       console.log('Blob created, size:', blob.size, 'type:', blob.type);
       
-      // Create FormData for Imgur API
-      const formData = new FormData();
-      formData.append('image', blob);
-      formData.append('type', 'file');
-      formData.append('title', `Challenge ${challengeId} - ${userId}`);
-      formData.append('description', 'Challenge completion proof');
+      // Convert blob to base64 for ImageBB
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          if (!result) {
+            reject(new Error('Failed to convert to base64'));
+            return;
+          }
+          // Remove data:image/jpeg;base64, prefix
+          const base64Data = result.split(',')[1];
+          resolve(base64Data);
+        };
+        reader.onerror = () => reject(new Error('FileReader error'));
+        reader.readAsDataURL(blob);
+      });
 
-      console.log('Sending request to Imgur API...');
+      console.log('Base64 conversion complete, length:', base64.length);
+
+      // Create FormData for ImageBB API
+      const formData = new FormData();
+      formData.append('image', base64);
+      formData.append('name', `challenge_${challengeId}_${userId}_${Date.now()}`);
+
+      console.log('Sending request to ImageBB API...');
       
-      const imgurResponse = await fetch('https://api.imgur.com/3/image', {
+      const imageBBResponse = await fetch('https://api.imgbb.com/1/upload?key=d139b80db1d7b0e4c9bfa4923165cbc6', {
         method: 'POST',
-        headers: {
-          'Authorization': 'Client-ID 546c25a59c58ad7',
-        },
         body: formData,
       });
 
-      console.log('Imgur response status:', imgurResponse.status);
+      console.log('ImageBB response status:', imageBBResponse.status);
       
-      if (!imgurResponse.ok) {
-        const errorText = await imgurResponse.text();
-        console.error('Imgur API error:', errorText);
-        throw new Error(`Imgur upload failed: ${imgurResponse.status} - ${errorText}`);
+      if (!imageBBResponse.ok) {
+        const errorText = await imageBBResponse.text();
+        console.error('ImageBB API error:', errorText);
+        throw new Error(`ImageBB upload failed: ${imageBBResponse.status} - ${errorText}`);
       }
 
-      const imgurData = await imgurResponse.json();
-      console.log('Imgur response:', imgurData);
+      const imageBBData = await imageBBResponse.json();
+      console.log('ImageBB response:', imageBBData);
       
-      if (!imgurData.success) {
-        console.error('Imgur upload unsuccessful:', imgurData);
-        throw new Error(`Imgur upload failed: ${imgurData.data?.error || 'Unknown error'}`);
+      if (!imageBBData.success) {
+        console.error('ImageBB upload unsuccessful:', imageBBData);
+        throw new Error(`ImageBB upload failed: ${imageBBData.error?.message || 'Unknown error'}`);
       }
 
-      console.log('Upload successful, image URL:', imgurData.data.link);
-      return imgurData.data.link;
+      console.log('Upload successful, image URL:', imageBBData.data.url);
+      return imageBBData.data.url;
     } catch (error) {
       console.error('Error uploading photo:', error);
       toast({
