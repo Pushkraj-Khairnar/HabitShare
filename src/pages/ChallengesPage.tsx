@@ -21,6 +21,7 @@ import { Toggle } from '@/components/ui/toggle';
 import { useAuth } from '@/contexts/AuthContext';
 import { CalendarCheck } from 'lucide-react';
 import { ChallengePhotoCapture } from '@/components/challenges/ChallengePhotoCapture';
+import { ChallengePhotoViewer } from '@/components/challenges/ChallengePhotoViewer';
 
 const ChallengesPage = () => {
   const { 
@@ -54,6 +55,10 @@ const ChallengesPage = () => {
   
   const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
   const [selectedChallengeId, setSelectedChallengeId] = useState<string>('');
+  
+  const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
+  const [selectedPhotoDate, setSelectedPhotoDate] = useState<string>('');
+  const [selectedPhotoChallenge, setSelectedPhotoChallenge] = useState<Challenge | null>(null);
   
   useEffect(() => {
     const loadData = async () => {
@@ -215,6 +220,15 @@ const ChallengesPage = () => {
     setSelectedChallengeId('');
   };
   
+  const handleViewPhotos = (challengeId: string, date: string) => {
+    const challenge = activeChallenges.find(c => c.id === challengeId);
+    if (challenge) {
+      setSelectedPhotoChallenge(challenge);
+      setSelectedPhotoDate(date);
+      setPhotoViewerOpen(true);
+    }
+  };
+  
   const renderChallengeCard = (challenge: Challenge) => {
     const users = challengeUsers[challenge.id];
     const today = startOfToday();
@@ -230,6 +244,9 @@ const ChallengesPage = () => {
     const userPhotos = isSender 
       ? challenge.senderDailyPhotos 
       : challenge.receiverDailyPhotos;
+    const partnerPhotos = isSender 
+      ? challenge.receiverDailyPhotos 
+      : challenge.senderDailyPhotos;
     
     return (
       <Card key={challenge.id} className="mb-4">
@@ -282,11 +299,13 @@ const ChallengesPage = () => {
           )}
           
           <div className="mt-6">
-            <p className="text-sm font-medium mb-3">Mark Daily Completion</p>
+            <p className="text-sm font-medium mb-3">Daily Progress</p>
             <div className="flex justify-between gap-2">
               {last7Days.map((date) => {
                 const isCompleted = userCompletions?.includes(date);
-                const hasPhoto = userPhotos?.[date];
+                const hasUserPhoto = userPhotos?.[date];
+                const hasPartnerPhoto = partnerPhotos?.[date];
+                const hasAnyPhoto = hasUserPhoto || hasPartnerPhoto;
                 const isPast = new Date(date) < today;
                 const isToday = date === format(today, 'yyyy-MM-dd');
                 
@@ -323,13 +342,38 @@ const ChallengesPage = () => {
                       </Button>
                     )}
                     
-                    {hasPhoto && (
-                      <div className="w-8 h-8 rounded border-2 border-habit-success overflow-hidden">
-                        <img
-                          src={hasPhoto}
-                          alt="Proof"
-                          className="w-full h-full object-cover"
-                        />
+                    {hasAnyPhoto && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleViewPhotos(challenge.id, date)}
+                        className="h-8 w-16 p-1 text-xs"
+                      >
+                        View Photos
+                      </Button>
+                    )}
+                    
+                    {/* Small photo indicators */}
+                    {(hasUserPhoto || hasPartnerPhoto) && (
+                      <div className="flex gap-1">
+                        {hasUserPhoto && (
+                          <div className="w-4 h-4 rounded border border-habit-success overflow-hidden">
+                            <img
+                              src={hasUserPhoto}
+                              alt="Your proof"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        )}
+                        {hasPartnerPhoto && (
+                          <div className="w-4 h-4 rounded border border-habit-purple overflow-hidden">
+                            <img
+                              src={hasPartnerPhoto}
+                              alt="Partner's proof"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -637,6 +681,32 @@ const ChallengesPage = () => {
         onPhotoSubmitted={handlePhotoSubmitted}
         challengeId={selectedChallengeId}
         userId={currentUser?.uid || ''}
+      />
+      
+      <ChallengePhotoViewer
+        isOpen={photoViewerOpen}
+        onClose={() => setPhotoViewerOpen(false)}
+        date={selectedPhotoDate}
+        userPhoto={selectedPhotoChallenge && challengeUsers[selectedPhotoChallenge.id] ? 
+          (challengeUsers[selectedPhotoChallenge.id].sender.id === currentUser?.uid 
+            ? selectedPhotoChallenge.senderDailyPhotos?.[selectedPhotoDate]
+            : selectedPhotoChallenge.receiverDailyPhotos?.[selectedPhotoDate]
+          ) : undefined
+        }
+        partnerPhoto={selectedPhotoChallenge && challengeUsers[selectedPhotoChallenge.id] ? 
+          (challengeUsers[selectedPhotoChallenge.id].sender.id === currentUser?.uid 
+            ? selectedPhotoChallenge.receiverDailyPhotos?.[selectedPhotoDate]
+            : selectedPhotoChallenge.senderDailyPhotos?.[selectedPhotoDate]
+          ) : undefined
+        }
+        userName={challengeUsers[selectedPhotoChallenge?.id || '']?.sender.id === currentUser?.uid 
+          ? challengeUsers[selectedPhotoChallenge?.id || '']?.sender.username || 'You'
+          : challengeUsers[selectedPhotoChallenge?.id || '']?.receiver.username || 'You'
+        }
+        partnerName={challengeUsers[selectedPhotoChallenge?.id || '']?.sender.id === currentUser?.uid 
+          ? challengeUsers[selectedPhotoChallenge?.id || '']?.receiver.username || 'Partner'
+          : challengeUsers[selectedPhotoChallenge?.id || '']?.sender.username || 'Partner'
+        }
       />
     </div>
   );
